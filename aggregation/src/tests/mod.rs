@@ -1,5 +1,6 @@
 use crate::tests::sample_proof::{get_proof, unsafe_setup, UnsafeSrs};
 
+use super::proof::VerificationKey;
 use super::*;
 use ark_std::{end_timer, start_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -120,4 +121,15 @@ fn test_aggregation_circuit() {
     )
     .unwrap();
     end_timer!(verify_time);
+}
+
+#[test]
+fn test_load_groth16() {
+    const VK_FILE: &str = "src/tests/vk.json";
+    let vk: VerificationKey = serde_json::from_reader(
+        File::open(VK_FILE).unwrap_or_else(|e| panic!("{VK_FILE}: {e:?}")),
+    )
+    .unwrap_or_else(|e| panic!("{VK_FILE} JSON: {e:?}"));
+
+    // assert!(false);
 }
