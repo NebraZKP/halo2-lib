@@ -3,7 +3,9 @@ use crate::tests::sample_proof::{get_proof, unsafe_setup, UnsafeSrs};
 use super::*;
 use ark_std::{end_timer, start_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2_base::halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
+use halo2_base::halo2_proofs::plonk::{
+    create_proof, keygen_pk, keygen_vk, verify_proof,
+};
 use halo2_base::halo2_proofs::poly::commitment::ParamsProver;
 use halo2_base::halo2_proofs::poly::kzg::{
     commitment::{KZGCommitmentScheme, ParamsKZG},
@@ -11,7 +13,8 @@ use halo2_base::halo2_proofs::poly::kzg::{
     strategy::SingleStrategy,
 };
 use halo2_base::halo2_proofs::transcript::{
-    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
+    TranscriptWriterBuffer,
 };
 use halo2_base::utils::fs::gen_srs;
 use halo2_ecc::halo2_base::gates::builder::{
@@ -31,7 +34,12 @@ struct CircuitParams {
 }
 
 /// Given concrete `data` for a circuit, generates circuit's constraints in `ctx`.
-fn circuit_test(ctx: &mut Context<Fr>, params: CircuitParams, proofs: (), vk: ()) {
+fn circuit_test(
+    ctx: &mut Context<Fr>,
+    params: CircuitParams,
+    proofs: (),
+    vk: (),
+) {
     // Assign proofs / instances as witnesses in `ctx`
 
     // Call `verify_batch`
@@ -56,7 +64,8 @@ fn test_aggregation_circuit() {
     // Read parameters from a config file
     let path = "src/tests/circuit.config";
     let params: CircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+        File::open(path)
+            .unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
     let rng = OsRng;
@@ -77,7 +86,8 @@ fn test_aggregation_circuit() {
 
     // Create proof
     let proof_time = start_timer!(|| "Proving time");
-    let circuit = random_circuit(params, CircuitBuilderStage::Prover, Some(break_points));
+    let circuit =
+        random_circuit(params, CircuitBuilderStage::Prover, Some(break_points));
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     create_proof::<
         KZGCommitmentScheme<Bn256>,
@@ -101,7 +111,13 @@ fn test_aggregation_circuit() {
         Challenge255<G1Affine>,
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         SingleStrategy<'_, Bn256>,
-    >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
+    >(
+        verifier_params,
+        pk.get_vk(),
+        strategy,
+        &[&[]],
+        &mut transcript,
+    )
     .unwrap();
     end_timer!(verify_time);
 }
