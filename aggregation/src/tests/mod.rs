@@ -1,4 +1,4 @@
-use crate::tests::sample_proof::{unsafe_setup, UnsafeSrs};
+use crate::tests::sample_proof::{unsafe_setup, UnsafeSrs, get_proof};
 
 use super::*;
 use ark_std::{end_timer, start_timer};
@@ -46,7 +46,7 @@ fn random_circuit(
 ) -> RangeCircuitBuilder<Fr> {
     // sample/read some Groth16 proofs somehow
     let (vk, pk) = unsafe_setup(UnsafeSrs);
-    let proof = sample_proof(pk, OsRng);
+    let proof = get_proof(pk, OsRng);
     // call circuit_test
     todo!()
 }
