@@ -1,18 +1,20 @@
 use rand_core::OsRng;
 
-pub(crate) struct UnsafeSrs;
+pub struct UnsafeSrs;
 
 ///
-pub(crate) struct UnsafePk;
+pub struct UnsafePk;
 
 /// Wrapper around a verifying key
-pub(crate) struct UnsafeVk;
+pub struct UnsafeVk;
 
 /// Wrapper around a `Groth16Proof`
-pub(crate) struct UnsafeProof;
+pub struct Groth16Proof;
 
 pub fn unsafe_setup(srs: UnsafeSrs) -> (UnsafeVk, UnsafePk) {
     todo!()
 }
 
-pub fn get_proof(pk: UnsafePk, rng: OsRng) -> Groth16Proof;
+pub fn get_proof(pk: UnsafePk, rng: OsRng) -> Groth16Proof {
+    todo!();
+}

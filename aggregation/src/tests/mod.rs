@@ -1,4 +1,4 @@
-use crate::tests::sample_proof::{unsafe_setup, UnsafeSrs, get_proof};
+use crate::tests::sample_proof::{get_proof, unsafe_setup, UnsafeSrs};
 
 use super::*;
 use ark_std::{end_timer, start_timer};
