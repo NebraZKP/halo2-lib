@@ -4,6 +4,7 @@ use super::proof::VerificationKey;
 use super::*;
 use ark_std::{end_timer, start_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 use halo2_base::halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof,
 };
@@ -126,10 +127,19 @@ fn test_aggregation_circuit() {
 #[test]
 fn test_load_groth16() {
     const VK_FILE: &str = "src/tests/vk.json";
-    let vk: VerificationKey = serde_json::from_reader(
+    let vk: VerificationKeyOB = serde_json::from_reader(
         File::open(VK_FILE).unwrap_or_else(|e| panic!("{VK_FILE}: {e:?}")),
     )
     .unwrap_or_else(|e| panic!("{VK_FILE} JSON: {e:?}"));
+
+    let x = Fr::from(1);
+    println!("{x:?}");
+
+    let y = Fr::from(2);
+    println!("{y:?}");
+
+    let z = Fr::from_str_vartime("20491192805390485299153009773594534940189261866228447918068658471970481763042");
+    println!("{z:?}");
 
     // assert!(false);
 }
