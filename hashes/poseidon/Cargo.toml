@@ -6,22 +6,22 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 array-init = "2.0.0"
-rand = "0.8"
+halo2-base = { path = "../../halo2-base", default-features = false, features = ["halo2-axiom"] }
 itertools = "0.10.3"
 lazy_static = "1.4"
 log = "0.4"
 num-bigint = { version = "0.4" }
-halo2-base = { path = "../../halo2-base", default-features = false, features = ["halo2-axiom"] }
-rayon = "1.6.1"
 poseidon = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
+rand = "0.8"
+rayon = "1.6.1"
 
 [dev-dependencies]
+env_logger = "0.10"
 hex = "0.4.3"
 itertools = "0.10.1"
 pretty_assertions = "1.0.0"
 rand_core = "0.6.4"
 rand_xorshift = "0.3"
-env_logger = "0.10"
 
 [features]
 default = ["display"]
