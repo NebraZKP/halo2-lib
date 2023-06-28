@@ -1,3 +1,5 @@
+use crate::tests::sample_proof::{unsafe_setup, UnsafeSrs};
+
 use super::*;
 use ark_std::{end_timer, start_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -20,6 +22,8 @@ use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
+pub mod sample_proof;
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct CircuitParams {
     degree: u32,
@@ -27,7 +31,10 @@ struct CircuitParams {
 }
 
 /// Given concrete `data` for a circuit, generates circuit's constraints in `ctx`.
-fn circuit_test(ctx: &mut Context<Fr>, params: CircuitParams, data: ()) {
+fn circuit_test(ctx: &mut Context<Fr>, params: CircuitParams, proofs: (), vk: ()) {
+    // Assign proofs / instances as witnesses in `ctx`
+
+    // Call `verify_batch`
     todo!()
 }
 
@@ -37,6 +44,9 @@ fn random_circuit(
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
+    // sample/read some Groth16 proofs somehow
+    let (vk, pk) = unsafe_setup(UnsafeSrs);
+    let proof = sample_proof(pk, OsRng);
     // call circuit_test
     todo!()
 }
