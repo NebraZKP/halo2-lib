@@ -1,7 +1,7 @@
 pub mod circuit;
 pub mod proof;
 
-pub use circuit::add;
+pub use circuit::batch_verify;
 
 #[cfg(test)]
 mod tests;

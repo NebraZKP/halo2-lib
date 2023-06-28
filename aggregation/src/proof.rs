@@ -3,6 +3,14 @@ use halo2_base::halo2_proofs::halo2curves::bn256::{
 };
 use serde::{Deserialize, Serialize};
 
+pub struct Proof {
+    pub a: G1Affine,
+    pub b: G2Affine,
+    pub c: G1Affine,
+    /// Public inputs
+    pub pi: Vec<Fr>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JsonVerificationKey {
     pub alpha: [String; 2],

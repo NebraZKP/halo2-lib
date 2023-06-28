@@ -18,7 +18,9 @@ use halo2_base::halo2_proofs::transcript::{
     Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
     TranscriptWriterBuffer,
 };
+use halo2_base::safe_types::RangeChip;
 use halo2_base::utils::fs::gen_srs;
+use halo2_ecc::bn254::FpChip;
 use halo2_ecc::halo2_base::gates::builder::{
     CircuitBuilderStage, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
 };
@@ -32,19 +34,26 @@ pub mod sample_proof;
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct CircuitParams {
     degree: u32,
+    limb_bits: usize,
+    num_limbs: usize,
+    lookup_bits: usize,
     num_proofs: usize,
 }
 
 /// Given concrete `data` for a circuit, generates circuit's constraints in `ctx`.
 fn circuit_test(
     ctx: &mut Context<Fr>,
-    params: CircuitParams,
+    params: &CircuitParams,
     proofs: (),
-    vk: (),
+    vk: &VerificationKey,
 ) {
+    let range = RangeChip::<Fr>::default(params.lookup_bits);
+    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+
     // Assign proofs / instances as witnesses in `ctx`
 
     // Call `verify_batch`
+
     todo!()
 }
 
