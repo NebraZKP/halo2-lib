@@ -1,12 +1,22 @@
 use super::*;
 use ark_std::{end_timer, start_timer};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use halo2_base::halo2_proofs::plonk::{keygen_pk, keygen_vk};
+use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2_base::halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
+use halo2_base::halo2_proofs::poly::commitment::ParamsProver;
+use halo2_base::halo2_proofs::poly::kzg::{
+    commitment::{KZGCommitmentScheme, ParamsKZG},
+    multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    strategy::SingleStrategy,
+};
+use halo2_base::halo2_proofs::transcript::{
+    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+};
 use halo2_base::utils::fs::gen_srs;
 use halo2_ecc::halo2_base::gates::builder::{
     CircuitBuilderStage, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
 };
 use halo2_ecc::halo2_base::Context;
+use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
@@ -39,6 +49,7 @@ fn test_aggregation_circuit() {
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
+    let rng = OsRng;
     let k = params.degree;
     let kzg_params = gen_srs(k);
 
@@ -51,7 +62,36 @@ fn test_aggregation_circuit() {
     let pk_time = start_timer!(|| "Generating pkey");
     let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
     end_timer!(pk_time);
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
 
-    // Generate proof
+    // Create proof
+    let proof_time = start_timer!(|| "Proving time");
+    let circuit = random_circuit(params, CircuitBuilderStage::Prover, Some(break_points));
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverSHPLONK<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&kzg_params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let proof = transcript.finalize();
+    end_timer!(proof_time);
     // Verify proof
+    let verify_time = start_timer!(|| "Verify time");
+    let verifier_params = kzg_params.verifier_params();
+    let strategy = SingleStrategy::new(&kzg_params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    verify_proof::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierSHPLONK<'_, Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+        SingleStrategy<'_, Bn256>,
+    >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
+    .unwrap();
+    end_timer!(verify_time);
 }
