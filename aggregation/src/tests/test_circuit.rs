@@ -1,5 +1,8 @@
 use super::*;
-use crate::circuit::{batch_verify, AssignedProof, AssignedPublicInputs};
+use crate::circuit::{
+    assign_proof, assign_public_inputs, batch_verify, AssignedProof,
+    AssignedPublicInputs,
+};
 use crate::native::{
     load_proof_and_inputs, load_vk, Proof, PublicInputs, VerificationKey,
 };
@@ -43,11 +46,16 @@ fn batch_verify_circuit(
     let assigned_proofs_and_inputs: Vec<(
         AssignedProof<Fr, FpChip<Fr>>,
         AssignedPublicInputs<Fr>,
-    )> = proofs_and_inputs.iter().map(|_p| todo!()).collect();
+    )> = proofs_and_inputs
+        .iter()
+        .map(|p_i| {
+            (assign_proof(ctx, &p_i.0), assign_public_inputs(ctx, &p_i.1))
+        })
+        .collect();
     // Call `batch_verify`
     batch_verify(ctx, &fp_chip, vk, &assigned_proofs_and_inputs);
 
-    todo!()
+    todo!();
 }
 
 #[test]

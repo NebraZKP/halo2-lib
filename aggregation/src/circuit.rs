@@ -1,25 +1,29 @@
 use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
+use halo2_base::halo2_proofs::halo2curves::FieldExt;
 use halo2_base::utils::ScalarField;
 use halo2_base::{AssignedValue, Context};
 use halo2_ecc::ecc::EcPoint;
 use halo2_ecc::fields::vector::FieldVector;
 use halo2_ecc::fields::FieldChip;
 
-use crate::native::VerificationKey;
+use crate::native::{Proof, PublicInputs, VerificationKey};
 
 // In-circuit objects
 
+// In-circuit Groth16 proof
 pub struct AssignedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
     pub a: EcPoint<F, FC::FieldPoint>,
     pub b: EcPoint<F, FieldVector<FC::FieldPoint>>,
     pub c: EcPoint<F, FC::FieldPoint>,
 }
 
+// In-circuit public inputs
 pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
     Vec<AssignedValue<F>>,
 );
 
+/// In-circuit equivalent of PreparedProof.
 struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
     pub ab_pairs: Vec<(EcPoint<F, FC::FieldPoint>, EcPoint<F, FC::FieldPoint>)>,
     pub rP: (
@@ -34,6 +38,20 @@ struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
         EcPoint<F, FC::FieldPoint>,
         EcPoint<F, FieldVector<FC::FieldPoint>>,
     ),
+}
+
+pub fn assign_public_inputs<F: PrimeField + ScalarField>(
+    ctx: &mut Context<F>,
+    inputs: &PublicInputs,
+) -> AssignedPublicInputs<F> {
+    todo!();
+}
+
+pub fn assign_proof<F: PrimeField + ScalarField, FC: FieldChip<F>>(
+    ctx: &mut Context<F>,
+    proof: &Proof,
+) -> AssignedProof<F, FC> {
+    todo!();
 }
 
 fn prepare_proofs<FC: FieldChip<Fr>>(
