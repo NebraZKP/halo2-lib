@@ -182,3 +182,12 @@ pub fn verify(
 
     return pairing_out == Gt::identity();
 }
+
+pub fn batch_verify(
+    vk: &VerificationKey,
+    proof: &Vec<Proof>,
+    inputs: &Vec<PublicInputs>,
+    challenge: Fr,
+) -> bool {
+    todo!()
+}

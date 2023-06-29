@@ -1,6 +1,5 @@
 use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_base::halo2_proofs::halo2curves::FieldExt;
 use halo2_base::utils::ScalarField;
 use halo2_base::{AssignedValue, Context};
 use halo2_ecc::ecc::EcPoint;
@@ -40,68 +39,74 @@ struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
     ),
 }
 
-pub fn assign_public_inputs<F: PrimeField + ScalarField>(
-    ctx: &mut Context<F>,
-    inputs: &PublicInputs,
-) -> AssignedPublicInputs<F> {
-    todo!();
+pub struct BatchVerifier<F: PrimeField + ScalarField, FC: FieldChip<F>> {
+    fp_chip: FC,
+    phantom_data: F,
 }
 
-pub fn assign_proof<F: PrimeField + ScalarField, FC: FieldChip<F>>(
-    ctx: &mut Context<F>,
-    proof: &Proof,
-) -> AssignedProof<F, FC> {
-    todo!();
-}
+impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
+    pub fn assign_public_inputs(
+        self: &Self,
+        ctx: &mut Context<F>,
+        inputs: &PublicInputs,
+    ) -> AssignedPublicInputs<F> {
+        todo!();
+    }
 
-fn prepare_proofs<FC: FieldChip<Fr>>(
-    ctx: &mut Context<Fr>,
-    fp_chip: &FC,
-    vk: &VerificationKey,
-    proofs: &Vec<(AssignedProof<Fr, FC>, AssignedPublicInputs<Fr>)>,
-) -> AssignedPreparedProof<Fr, FC> {
-    todo!()
-}
+    pub fn assign_proof(
+        self: &Self,
+        ctx: &mut Context<F>,
+        proof: &Proof,
+    ) -> AssignedProof<F, FC> {
+        todo!();
+    }
 
-fn run_multi_miller<FC: FieldChip<Fr>>(
-    ctx: &mut Context<Fr>,
-    fp_chip: &FC,
-    prepared: &AssignedPreparedProof<Fr, FC>,
-) -> FieldVector<FC::FieldPoint> {
-    todo!()
-}
+    fn prepare_proofs(
+        self: &Self,
+        ctx: &mut Context<F>,
+        vk: &VerificationKey,
+        proofs: &Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
+    ) -> AssignedPreparedProof<F, FC> {
+        todo!()
+    }
 
-fn run_final_exp<FC: FieldChip<Fr>>(
-    ctx: &mut Context<Fr>,
-    fp_chip: &FC,
-    miller_out: &FieldVector<FC::FieldPoint>,
-) -> FieldVector<FC::FieldPoint> {
-    todo!();
-}
+    fn multi_miller(
+        self: &Self,
+        ctx: &mut Context<F>,
+        prepared: &AssignedPreparedProof<F, FC>,
+    ) -> FieldVector<FC::FieldPoint> {
+        todo!()
+    }
 
-/// Constrain final_exp_out == 1 in GT
-fn check_final_exp<FC: FieldChip<Fr>>(
-    ctx: &mut Context<Fr>,
-    fp_chip: &FC,
-    final_exp_out: &FieldVector<FC::FieldPoint>,
-) -> FieldVector<FC::FieldPoint> {
-    todo!();
-}
+    fn final_exponentiation(
+        self: &Self,
+        ctx: &mut Context<F>,
+        miller_out: &FieldVector<FC::FieldPoint>,
+    ) -> FieldVector<FC::FieldPoint> {
+        todo!();
+    }
 
-/// Execute the top-level batch verification by accumulating (as far as
-/// possible) all proofs and public inputs, and performing a single large
-/// pairing check.
-pub fn batch_verify<FC: FieldChip<Fr>>(
-    ctx: &mut Context<Fr>,
-    fp_chip: &FC,
-    vk: &VerificationKey,
-    proofs: &Vec<(AssignedProof<Fr, FC>, AssignedPublicInputs<Fr>)>,
-) {
-    let prepared: AssignedPreparedProof<Fr, FC> =
-        prepare_proofs(ctx, fp_chip, vk, proofs);
-    let miller_out: FieldVector<FC::FieldPoint> =
-        run_multi_miller(ctx, fp_chip, &prepared);
-    let final_exp_out: FieldVector<FC::FieldPoint> =
-        run_final_exp(ctx, fp_chip, &miller_out);
-    check_final_exp(ctx, fp_chip, &final_exp_out);
+    /// Constrain final_exp_out == 1 in GT
+    fn check_final_exp(
+        self: &Self,
+        ctx: &mut Context<F>,
+        final_exp_out: &FieldVector<FC::FieldPoint>,
+    ) -> FieldVector<FC::FieldPoint> {
+        todo!();
+    }
+
+    /// Execute the top-level batch verification by accumulating (as far as
+    /// possible) all proofs and public inputs, and performing a single large
+    /// pairing check.
+    pub fn batch_verify(
+        self: &Self,
+        ctx: &mut Context<F>,
+        vk: &VerificationKey,
+        proofs: &Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
+    ) {
+        let prepared = self.prepare_proofs(ctx, vk, proofs);
+        let miller_out = self.multi_miller(ctx, &prepared);
+        let final_exp_out = self.final_exponentiation(ctx, &miller_out);
+        self.check_final_exp(ctx, &final_exp_out);
+    }
 }
