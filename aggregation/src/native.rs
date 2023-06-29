@@ -86,6 +86,20 @@ pub struct Proof {
     // pub pi: Vec<Fr>,
 }
 
+/// "Prepared" here means that all curve points have been accumulated and we
+/// have a sequence of pairs of G1 and G2 points ready for passing to a
+/// multi-Miller loop.
+struct PreparedProof {
+    /// Rescaled pairs (r^i * A_i, B_i)
+    pub ab_pairs: Vec<(G1Affine, G2Affine)>,
+    /// (-sum_i r^i * P, Q)
+    pub rP: (G1Affine, G2Affine),
+    /// (-PI, h)
+    pub pi: (G1Affine, G2Affine),
+    /// (- sum_i r^i C_i, D)
+    pub zc: (G1Affine, G2Affine),
+}
+
 impl From<&JsonProof> for Proof {
     fn from(json: &JsonProof) -> Self {
         Proof {
