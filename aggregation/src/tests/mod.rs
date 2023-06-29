@@ -7,6 +7,7 @@ mod test_native;
 const VK_FILE: &str = "src/tests/vk.json";
 const PROOF1_FILE: &str = "src/tests/proof1.json";
 const PROOF2_FILE: &str = "src/tests/proof2.json";
+const PROOF3_FILE: &str = "src/tests/proof3.json";
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 struct CircuitParams {

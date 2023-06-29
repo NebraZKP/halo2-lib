@@ -1,12 +1,11 @@
 use std::fs::File;
 
 use halo2_base::halo2_proofs::halo2curves::bn256::{
-    multi_miller_loop, Fq, Fq12, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt,
+    multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
 };
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 
 use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
-use halo2_ecc::bn254;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -160,12 +159,16 @@ pub fn verify(
     assert!(vk.s.len() == inputs.0.len() + 1);
 
     // Multiply PIs by VK.s
-    let mut pi = vk.s[0];
-    for i in 0..inputs.0.len() {
-        pi = (pi + (vk.s[i + 1] * inputs.0[i])).into();
-    }
 
-    // Pairing check
+    let pi = {
+        let mut pi = G1::from(vk.s[0]);
+        for i in 0..inputs.0.len() {
+            pi = pi + (vk.s[i + 1] * inputs.0[i]);
+        }
+        G1Affine::from(pi)
+    };
+
+    // Compute the product of pairings
 
     let miller_out = multi_miller_loop(&[
         (&-proof.a, &G2Prepared::from_affine(proof.b)),
@@ -175,7 +178,7 @@ pub fn verify(
     ]);
     let pairing_out = miller_out.final_exponentiation();
 
-    println!("pairing_out: {pairing_out:?}");
+    // Pairing check
 
     return pairing_out == Gt::identity();
 }
