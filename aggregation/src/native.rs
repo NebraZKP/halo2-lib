@@ -185,9 +185,11 @@ pub fn verify(
 
 pub fn batch_verify(
     vk: &VerificationKey,
-    proof: &Vec<Proof>,
-    inputs: &Vec<PublicInputs>,
-    challenge: Fr,
+    proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
+    r: Fr,
 ) -> bool {
-    todo!()
+    // let
+    // let r_powers =
+
+    todo!();
 }

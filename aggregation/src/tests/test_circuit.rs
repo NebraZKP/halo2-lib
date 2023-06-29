@@ -1,8 +1,5 @@
 use super::*;
-use crate::circuit::{
-    assign_proof, assign_public_inputs, batch_verify, AssignedProof,
-    AssignedPublicInputs,
-};
+use crate::circuit::{AssignedProof, AssignedPublicInputs, BatchVerifier};
 use crate::native::{
     load_proof_and_inputs, load_vk, Proof, PublicInputs, VerificationKey,
 };
@@ -31,6 +28,7 @@ use halo2_ecc::halo2_base::gates::builder::{
 use halo2_ecc::halo2_base::Context;
 use rand_core::OsRng;
 use std::fs::File;
+use std::marker::PhantomData;
 
 fn batch_verify_circuit(
     ctx: &mut Context<Fr>,
@@ -40,6 +38,10 @@ fn batch_verify_circuit(
 ) {
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let batch_verifier = BatchVerifier {
+        fp_chip,
+        _f: PhantomData,
+    };
 
     // Assign proofs / instances as witnesses in `ctx`
     let assigned_proofs_and_inputs: Vec<(
@@ -48,12 +50,15 @@ fn batch_verify_circuit(
     )> = proofs_and_inputs
         .iter()
         .map(|p_i| {
-            (assign_proof(ctx, &p_i.0), assign_public_inputs(ctx, &p_i.1))
+            (
+                batch_verifier.assign_proof(ctx, &p_i.0),
+                batch_verifier.assign_public_inputs(ctx, &p_i.1),
+            )
         })
         .collect();
 
     // Call `batch_verify`
-    batch_verify(ctx, &fp_chip, vk, &assigned_proofs_and_inputs);
+    batch_verifier.verify(ctx, vk, &assigned_proofs_and_inputs);
 }
 
 #[test]

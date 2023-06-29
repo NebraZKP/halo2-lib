@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 use halo2_base::utils::ScalarField;
@@ -40,8 +42,8 @@ struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
 }
 
 pub struct BatchVerifier<F: PrimeField + ScalarField, FC: FieldChip<F>> {
-    fp_chip: FC,
-    phantom_data: F,
+    pub fp_chip: FC,
+    pub _f: PhantomData<F>,
 }
 
 impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
@@ -98,7 +100,7 @@ impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
     /// Execute the top-level batch verification by accumulating (as far as
     /// possible) all proofs and public inputs, and performing a single large
     /// pairing check.
-    pub fn batch_verify(
+    pub fn verify(
         self: &Self,
         ctx: &mut Context<F>,
         vk: &VerificationKey,
