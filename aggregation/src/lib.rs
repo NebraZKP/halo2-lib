@@ -1,6 +1,5 @@
 pub mod circuit;
-
-pub use circuit::batch_verify;
+pub mod native;
 
 #[cfg(test)]
 mod tests;
