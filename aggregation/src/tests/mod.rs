@@ -1,4 +1,7 @@
-use crate::circuit::{AssignedProof, AssignedPublicInputs};
+use crate::circuit::{
+    AssignedProof, AssignedPublicInputs, JsonProof, JsonPublicInputs,
+    PublicInputs,
+};
 use crate::tests::sample_proof::{get_proof, unsafe_setup, UnsafeSrs};
 
 use super::circuit::{JsonVerificationKey, Proof, VerificationKey};
@@ -99,6 +102,8 @@ fn batch_verify_circuit(
 
     // Call `batch_verify`
     batch_verify(ctx, &fp_chip, vk, &assigned_proofs, &assigned_pi);
+
+    todo!()
 }
 
 #[test]
@@ -192,19 +197,35 @@ fn test_aggregation_circuit() {
 #[test]
 fn test_load_groth16() {
     const VK_FILE: &str = "src/tests/vk.json";
-    let vk: JsonVerificationKey = serde_json::from_reader(
+    const PROOF1_FILE: &str = "src/tests/proof1.json";
+
+    // Load VK
+
+    let vk_json: JsonVerificationKey = serde_json::from_reader(
         File::open(VK_FILE).unwrap_or_else(|e| panic!("{VK_FILE}: {e:?}")),
     )
     .unwrap_or_else(|e| panic!("{VK_FILE} JSON: {e:?}"));
 
-    let x = Fr::from(1);
-    println!("{x:?}");
+    let vk = VerificationKey::from(&vk_json);
+    println!("VK is {vk:?}");
 
-    let y = Fr::from(2);
-    println!("{y:?}");
+    #[derive(Debug, Serialize, Deserialize)]
+    struct JsonProofAndInputs {
+        proof: JsonProof,
+        inputs: JsonPublicInputs,
+    };
 
-    let z = Fr::from_str_vartime("20491192805390485299153009773594534940189261866228447918068658471970481763042");
-    println!("{z:?}");
+    // Load Proof and PI
 
-    // assert!(false);
+    let proof_pi_json: JsonProofAndInputs = serde_json::from_reader(
+        File::open(PROOF1_FILE)
+            .unwrap_or_else(|e| panic!("{PROOF1_FILE}: {e:?}")),
+    )
+    .unwrap_or_else(|e| panic!("{PROOF1_FILE} JSON: {e:?}"));
+
+    let proof = Proof::from(&proof_pi_json.proof);
+    println!("PROOF is {proof:?}");
+
+    let public_inputs = PublicInputs::from(&proof_pi_json.inputs);
+    println!("PIs are {public_inputs:?}");
 }
