@@ -1,7 +1,7 @@
 use std::fs::File;
 
 use halo2_base::halo2_proofs::halo2curves::bn256::{
-    multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared,
+    multi_miller_loop, Fq, Fq12, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt,
 };
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 
@@ -160,9 +160,9 @@ pub fn verify(
     assert!(vk.s.len() == inputs.0.len() + 1);
 
     // Multiply PIs by VK.s
-    let mut pi = vk.s[0].clone();
+    let mut pi = vk.s[0];
     for i in 0..inputs.0.len() {
-        let pi = pi + (vk.s[i + 1] * inputs.0[i]);
+        pi = (pi + (vk.s[i + 1] * inputs.0[i])).into();
     }
 
     // Pairing check
@@ -177,5 +177,5 @@ pub fn verify(
 
     println!("pairing_out: {pairing_out:?}");
 
-    todo!()
+    return pairing_out == Gt::identity();
 }
