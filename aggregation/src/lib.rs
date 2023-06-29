@@ -1,5 +1,4 @@
 pub mod circuit;
-pub mod proof;
 
 pub use circuit::batch_verify;
 
