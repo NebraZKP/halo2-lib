@@ -51,6 +51,7 @@ fn batch_verify_circuit(
             (assign_proof(ctx, &p_i.0), assign_public_inputs(ctx, &p_i.1))
         })
         .collect();
+
     // Call `batch_verify`
     batch_verify(ctx, &fp_chip, vk, &assigned_proofs_and_inputs);
 }

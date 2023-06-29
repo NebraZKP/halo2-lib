@@ -1,9 +1,12 @@
 use std::fs::File;
 
 use halo2_base::halo2_proofs::halo2curves::bn256::{
-    Fq, Fq2, Fr, G1Affine, G2Affine,
+    multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared,
 };
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
+
+use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
+use halo2_ecc::bn254;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -147,4 +150,32 @@ pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
         Proof::from(&proof_pi_json.proof),
         PublicInputs::from(&proof_pi_json.inputs),
     )
+}
+
+pub fn verify(
+    vk: &VerificationKey,
+    proof: &Proof,
+    inputs: &PublicInputs,
+) -> bool {
+    assert!(vk.s.len() == inputs.0.len() + 1);
+
+    // Multiply PIs by VK.s
+    let mut pi = vk.s[0].clone();
+    for i in 0..inputs.0.len() {
+        let pi = pi + (vk.s[i + 1] * inputs.0[i]);
+    }
+
+    // Pairing check
+
+    let miller_out = multi_miller_loop(&[
+        (&-proof.a, &G2Prepared::from_affine(proof.b)),
+        (&vk.alpha, &G2Prepared::from_affine(vk.beta)),
+        (&pi, &G2Prepared::from_affine(G2Affine::generator())),
+        (&proof.c, &G2Prepared::from_affine(vk.delta)),
+    ]);
+    let pairing_out = miller_out.final_exponentiation();
+
+    println!("pairing_out: {pairing_out:?}");
+
+    todo!()
 }
