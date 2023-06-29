@@ -1,15 +1,10 @@
-use crate::circuit::{
-    AssignedProof, AssignedPublicInputs, JsonProof, JsonPublicInputs,
-    PublicInputs,
+use super::circuit::{
+    batch_verify, load_proof_and_inputs, load_vk, AssignedProof,
+    AssignedPublicInputs, Proof, PublicInputs, VerificationKey,
 };
-use crate::tests::sample_proof::{get_proof, unsafe_setup, UnsafeSrs};
-
-use super::circuit::{JsonVerificationKey, Proof, VerificationKey};
-use super::*;
 use ark_std::{end_timer, start_timer};
 use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 use halo2_base::halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof,
 };
@@ -31,12 +26,15 @@ use halo2_ecc::halo2_base::gates::builder::{
 };
 use halo2_ecc::halo2_base::Context;
 use rand_core::OsRng;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::fs::File;
 
 pub mod sample_proof;
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+const VK_FILE: &str = "src/tests/vk.json";
+const PROOF1_FILE: &str = "src/tests/proof1.json";
+
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct CircuitParams {
     degree: u32,
     limb_bits: usize,
@@ -75,33 +73,23 @@ struct CircuitParams {
 //     todo!()
 // }
 
-fn read_vk() -> VerificationKey {
-    todo!();
-}
-
-fn read_proofs() -> (Vec<Proof>, Vec<Vec<Fr>>) {
-    todo!();
-}
-
 fn batch_verify_circuit(
     ctx: &mut Context<Fr>,
     params: &CircuitParams,
     break_points: Option<MultiPhaseThreadBreakPoints>,
     vk: &VerificationKey,
-    proofs: &Vec<Proof>,
-    public_inputs: &Vec<Vec<Fr>>,
+    proofs_and_inputs: &Vec<(Proof, PublicInputs)>,
 ) -> RangeCircuitBuilder<Fr> {
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
 
     // Assign proofs / instances as witnesses in `ctx`
-    let assigned_proofs: Vec<AssignedProof<Fr, FpChip<Fr>>> =
-        proofs.iter().map(|p| todo!()).collect();
-    let assigned_pi: Vec<AssignedPublicInputs<Fr>> =
-        public_inputs.iter().map(|pi| todo!()).collect();
-
+    let assigned_proofs_and_inputs: Vec<(
+        AssignedProof<Fr, FpChip<Fr>>,
+        AssignedPublicInputs<Fr>,
+    )> = proofs_and_inputs.iter().map(|p| todo!()).collect();
     // Call `batch_verify`
-    batch_verify(ctx, &fp_chip, vk, &assigned_proofs, &assigned_pi);
+    batch_verify(ctx, &fp_chip, vk, &assigned_proofs_and_inputs);
 
     todo!()
 }
@@ -120,10 +108,13 @@ fn test_aggregation_circuit() {
     let kzg_params = gen_srs(k);
 
     // Read the vk
-    let inner_vk = read_vk();
+    let inner_vk = load_vk(VK_FILE);
 
     // Read the proofs
-    let (inner_proofs, inner_pi) = read_proofs();
+    let inner_proofs_and_inputs: Vec<(Proof, PublicInputs)> = [PROOF1_FILE]
+        .iter()
+        .map(|e| load_proof_and_inputs(*e))
+        .collect();
 
     // Construct the circuit for this inner_vk.  Generate outer keys.
     let mut builder = GateThreadBuilder::<Fr>::keygen();
@@ -132,8 +123,7 @@ fn test_aggregation_circuit() {
         &params,
         None,
         &inner_vk,
-        &inner_proofs,
-        &inner_pi,
+        &inner_proofs_and_inputs,
     );
 
     // Generate keys
@@ -154,8 +144,7 @@ fn test_aggregation_circuit() {
         &params,
         Some(break_points),
         &inner_vk,
-        &inner_proofs,
-        &inner_pi,
+        &inner_proofs_and_inputs,
     );
 
     //Create proof
@@ -196,36 +185,14 @@ fn test_aggregation_circuit() {
 
 #[test]
 fn test_load_groth16() {
-    const VK_FILE: &str = "src/tests/vk.json";
-    const PROOF1_FILE: &str = "src/tests/proof1.json";
-
     // Load VK
 
-    let vk_json: JsonVerificationKey = serde_json::from_reader(
-        File::open(VK_FILE).unwrap_or_else(|e| panic!("{VK_FILE}: {e:?}")),
-    )
-    .unwrap_or_else(|e| panic!("{VK_FILE} JSON: {e:?}"));
-
-    let vk = VerificationKey::from(&vk_json);
+    let vk = load_vk(VK_FILE);
     println!("VK is {vk:?}");
-
-    #[derive(Debug, Serialize, Deserialize)]
-    struct JsonProofAndInputs {
-        proof: JsonProof,
-        inputs: JsonPublicInputs,
-    };
 
     // Load Proof and PI
 
-    let proof_pi_json: JsonProofAndInputs = serde_json::from_reader(
-        File::open(PROOF1_FILE)
-            .unwrap_or_else(|e| panic!("{PROOF1_FILE}: {e:?}")),
-    )
-    .unwrap_or_else(|e| panic!("{PROOF1_FILE} JSON: {e:?}"));
-
-    let proof = Proof::from(&proof_pi_json.proof);
+    let (proof, inputs) = load_proof_and_inputs(PROOF1_FILE);
     println!("PROOF is {proof:?}");
-
-    let public_inputs = PublicInputs::from(&proof_pi_json.inputs);
-    println!("PIs are {public_inputs:?}");
+    println!("PIs are {inputs:?}");
 }

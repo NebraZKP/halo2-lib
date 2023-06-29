@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use halo2_base::halo2_proofs::halo2curves::bn256::{
     Fq, Fq2, Fr, G1Affine, G2Affine,
 };
@@ -6,6 +8,7 @@ use halo2_base::utils::ScalarField;
 use halo2_base::{AssignedValue, Context};
 use halo2_ecc::ecc::EcPoint;
 use halo2_ecc::fields::FieldChip;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 // Util functions for reading field and curve points from JSON.
@@ -109,6 +112,33 @@ impl From<&JsonPublicInputs> for PublicInputs {
     }
 }
 
+pub fn load_json<T: DeserializeOwned + Clone>(filename: &str) -> T {
+    let val: T = serde_json::from_reader(
+        File::open(filename).unwrap_or_else(|e| panic!("{filename}: {e:?}")),
+    )
+    .unwrap_or_else(|e| panic!("{filename} JSON: {e:?}"));
+    val
+}
+
+pub fn load_vk(filename: &str) -> VerificationKey {
+    let vk_json: JsonVerificationKey = load_json(filename);
+    VerificationKey::from(&vk_json)
+}
+
+pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct JsonProofAndInputs {
+        proof: JsonProof,
+        inputs: JsonPublicInputs,
+    }
+
+    let proof_pi_json: JsonProofAndInputs = load_json(filename);
+    (
+        Proof::from(&proof_pi_json.proof),
+        PublicInputs::from(&proof_pi_json.inputs),
+    )
+}
+
 // In-circuit objects
 
 pub struct AssignedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
@@ -142,10 +172,7 @@ pub fn batch_verify<FC: FieldChip<Fr>>(
     ctx: &mut Context<Fr>,
     fp_chip: &FC,
     vk: &VerificationKey,
-    proofs: &Vec<AssignedProof<Fr, FC>>,
-    public_inputs: &Vec<AssignedPublicInputs<Fr>>,
+    proofs: &Vec<(AssignedProof<Fr, FC>, AssignedPublicInputs<Fr>)>,
 ) {
-    assert!(proofs.len() == public_inputs.len());
-
-    todo!();
+    todo!()
 }
