@@ -35,10 +35,9 @@ use std::fs::File;
 fn batch_verify_circuit(
     ctx: &mut Context<Fr>,
     params: &CircuitParams,
-    _break_points: Option<MultiPhaseThreadBreakPoints>,
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(Proof, PublicInputs)>,
-) -> RangeCircuitBuilder<Fr> {
+) {
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
 
@@ -54,8 +53,6 @@ fn batch_verify_circuit(
         .collect();
     // Call `batch_verify`
     batch_verify(ctx, &fp_chip, vk, &assigned_proofs_and_inputs);
-
-    todo!();
 }
 
 #[test]
@@ -82,13 +79,14 @@ fn test_aggregation_circuit() {
 
     // Construct the circuit for this inner_vk.  Generate outer keys.
     let mut builder = GateThreadBuilder::<Fr>::keygen();
-    let circuit = batch_verify_circuit(
+    batch_verify_circuit(
         builder.main(0),
         &params,
-        None,
         &inner_vk,
         &inner_proofs_and_inputs,
     );
+    builder.config(k as usize, Some(20));
+    let circuit = RangeCircuitBuilder::keygen(builder);
 
     // Generate keys
     let vk_time = start_timer!(|| "Generating vkey");
@@ -97,19 +95,21 @@ fn test_aggregation_circuit() {
     let pk_time = start_timer!(|| "Generating pkey");
     let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
     end_timer!(pk_time);
+
     let break_points = circuit.0.break_points.take();
     drop(circuit);
 
     // Create proof
     let proof_time = start_timer!(|| "Proving time");
     let mut builder = GateThreadBuilder::<Fr>::prover();
-    let circuit = batch_verify_circuit(
+    batch_verify_circuit(
         builder.main(0),
         &params,
-        Some(break_points),
         &inner_vk,
         &inner_proofs_and_inputs,
     );
+    builder.config(k as usize, Some(20));
+    let circuit = RangeCircuitBuilder::prover(builder, break_points);
 
     //Create proof
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
