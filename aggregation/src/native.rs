@@ -1,14 +1,15 @@
 use std::fs::File;
 
-use halo2_base::halo2_proofs::halo2curves::bn256::{
-    multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
+use halo2_base::halo2_proofs::halo2curves::{
+    bn256::{
+        multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
+    },
+    group::ff::PrimeField,
+    CurveAffineExt,
 };
-use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_base::halo2_proofs::halo2curves::CurveAffineExt;
 
 use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::iter::once;
 
 // Util functions for reading field and curve points from JSON.

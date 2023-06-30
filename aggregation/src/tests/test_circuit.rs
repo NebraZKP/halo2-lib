@@ -1,31 +1,37 @@
 use super::*;
-use crate::circuit::{AssignedProof, AssignedPublicInputs, BatchVerifier};
-use crate::native::{
-    load_proof_and_inputs, load_vk, Proof, PublicInputs, VerificationKey,
+use crate::{
+    circuit::{AssignedProof, AssignedPublicInputs, BatchVerifier},
+    native::{
+        load_proof_and_inputs, load_vk, Proof, PublicInputs, VerificationKey,
+    },
 };
 use ark_std::{end_timer, start_timer};
-use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2_base::halo2_proofs::plonk::{
-    create_proof, keygen_pk, keygen_vk, verify_proof,
+use halo2_base::{
+    gates::builder::GateThreadBuilder,
+    halo2_proofs::{
+        halo2curves::bn256::{Bn256, Fr, G1Affine},
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
+        poly::{
+            commitment::ParamsProver,
+            kzg::{
+                commitment::KZGCommitmentScheme,
+                multiopen::{ProverSHPLONK, VerifierSHPLONK},
+                strategy::SingleStrategy,
+            },
+        },
+        transcript::{
+            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
+            TranscriptWriterBuffer,
+        },
+    },
+    safe_types::RangeChip,
+    utils::fs::gen_srs,
 };
-use halo2_base::halo2_proofs::poly::commitment::ParamsProver;
-use halo2_base::halo2_proofs::poly::kzg::{
-    commitment::KZGCommitmentScheme,
-    multiopen::{ProverSHPLONK, VerifierSHPLONK},
-    strategy::SingleStrategy,
+use halo2_ecc::{
+    bn254::FpChip, halo2_base::gates::builder::RangeCircuitBuilder,
 };
-use halo2_base::halo2_proofs::transcript::{
-    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
-    TranscriptWriterBuffer,
-};
-use halo2_base::safe_types::RangeChip;
-use halo2_base::utils::fs::gen_srs;
-use halo2_ecc::bn254::FpChip;
-use halo2_ecc::halo2_base::gates::builder::RangeCircuitBuilder;
 use rand_core::OsRng;
-use std::fs::File;
-use std::marker::PhantomData;
+use std::{fs::File, marker::PhantomData};
 
 fn batch_verify_circuit(
     builder: &mut GateThreadBuilder<Fr>,

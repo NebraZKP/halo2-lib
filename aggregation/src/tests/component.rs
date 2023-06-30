@@ -1,32 +1,30 @@
-use crate::circuit::scalar_powers;
 use ark_std::{end_timer, start_timer};
-use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::gates::builder::RangeCircuitBuilder;
-use halo2_base::halo2_proofs::halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2_base::halo2_proofs::plonk::{
-    create_proof, keygen_pk, keygen_vk, verify_proof,
-};
-use halo2_base::halo2_proofs::poly::{
-    commitment::ParamsProver,
-    kzg::{
-        commitment::KZGCommitmentScheme,
-        multiopen::{ProverSHPLONK, VerifierSHPLONK},
-        strategy::SingleStrategy,
+use halo2_base::{
+    gates::builder::{GateThreadBuilder, RangeCircuitBuilder},
+    halo2_proofs::{
+        halo2curves::bn256::{Bn256, Fr, G1Affine},
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
+        poly::{
+            commitment::ParamsProver,
+            kzg::{
+                commitment::KZGCommitmentScheme,
+                multiopen::{ProverSHPLONK, VerifierSHPLONK},
+                strategy::SingleStrategy,
+            },
+        },
+        transcript::{
+            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
+            TranscriptWriterBuffer,
+        },
     },
+    utils::{fs::gen_srs, ScalarField},
 };
-use halo2_base::halo2_proofs::transcript::{
-    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer,
-    TranscriptWriterBuffer,
-};
-use halo2_base::utils::fs::gen_srs;
-use halo2_base::utils::ScalarField;
 use rand_core::OsRng;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::path::Path;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{fs::File, path::Path};
 
-pub trait TestCircuitParameters<F: ScalarField> {
+/// Interface for testing a circuit component.
+pub trait TestCircuit<F: ScalarField> {
     /// Degree of KZG SRS
     fn degree(self) -> u32;
 
@@ -34,12 +32,13 @@ pub trait TestCircuitParameters<F: ScalarField> {
     fn build(self, builder: &mut GateThreadBuilder<F>);
 }
 
-pub fn test_component<'de, P>(config_path: impl AsRef<Path>)
+/// Test a circuit from a config located at `path`.
+pub fn test_component<'de, P>(path: impl AsRef<Path>)
 where
-    P: Copy + DeserializeOwned + TestCircuitParameters<Fr>,
+    P: Copy + DeserializeOwned + TestCircuit<Fr>,
 {
     let params: P = serde_json::from_reader(
-        File::open(config_path)
+        File::open(path)
             .unwrap_or_else(|e| panic!("Path does not exist: {e:?}")),
     )
     .unwrap();
@@ -106,39 +105,43 @@ where
     end_timer!(verify_time);
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct ScalarPowerCircuit
-// make generic over F
-// where F: ScalarField
-{
-    degree: u32,
-    base: u64, // cast to F
-    len: usize,
-    // _f: PhantomData<F>
-}
+pub mod scalar_powers {
+    use super::*;
+    use crate::circuit::scalar_powers;
 
-impl TestCircuitParameters<Fr> for ScalarPowerCircuit {
-    fn degree(self) -> u32 {
-        self.degree
+    #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+    /// A circuit to compute powers of `base` from `0` to `len - 1`.
+    pub struct ScalarPowerCircuit {
+        degree: u32,
+        /// To-Do: write `base` as a F element
+        base: u64,
+        len: usize,
     }
 
-    fn build(self, builder: &mut GateThreadBuilder<Fr>) {
-        let ctx = builder.main(0);
+    impl TestCircuit<Fr> for ScalarPowerCircuit {
+        fn degree(self) -> u32 {
+            self.degree
+        }
 
-        let base = ctx.load_witness(Fr::from(self.base));
-        let result = scalar_powers(ctx, base, self.len);
+        fn build(self, builder: &mut GateThreadBuilder<Fr>) {
+            let ctx = builder.main(0);
 
-        let answer = (0..self.len).map(|i| Fr::from(self.base.pow(i as u32)));
+            let base = ctx.load_witness(Fr::from(self.base));
+            let result = scalar_powers(ctx, base, self.len);
 
-        for (result, answer) in result.iter().zip(answer) {
-            let answer = ctx.load_constant(answer);
-            ctx.constrain_equal(result, &answer);
+            let answer =
+                (0..self.len).map(|i| Fr::from(self.base.pow(i as u32)));
+
+            for (result, answer) in result.iter().zip(answer) {
+                let answer = ctx.load_constant(answer);
+                ctx.constrain_equal(result, &answer);
+            }
         }
     }
-}
-// cargo test --package aggregation --lib --all-features -- tests::component::scalar_powers_test --exact --nocapture
-#[test]
-fn scalar_powers_test() {
-    let path = "src/tests/configs/scalar_powers.config";
-    test_component::<ScalarPowerCircuit>(path)
+    // cargo test --package aggregation --lib --all-features -- tests::component::scalar_powers::test --exact --nocapture
+    #[test]
+    fn test() {
+        let path = "src/tests/configs/scalar_powers.config";
+        test_component::<ScalarPowerCircuit>(path)
+    }
 }

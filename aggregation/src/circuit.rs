@@ -1,18 +1,18 @@
-use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::gates::GateChip;
-use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_base::halo2_proofs::halo2curves::CurveAffineExt;
-use halo2_base::safe_types::GateInstructions;
-use halo2_base::utils::ScalarField;
-use halo2_base::{AssignedValue, Context};
-use halo2_ecc::ecc::{scalar_multiply, EcPoint, EccChip};
-use halo2_ecc::fields::fp2::Fp2Chip;
-use halo2_ecc::fields::vector::FieldVector;
-use halo2_ecc::fields::{
-    FieldChip, FieldExtConstructor, PrimeFieldChip, Selectable,
+use halo2_base::{
+    gates::{builder::GateThreadBuilder, GateChip},
+    halo2_proofs::halo2curves::{group::ff::PrimeField, CurveAffineExt},
+    safe_types::GateInstructions,
+    utils::ScalarField,
+    AssignedValue, Context,
 };
-use std::hash::Hash;
-use std::marker::PhantomData;
+use halo2_ecc::{
+    ecc::{scalar_multiply, EcPoint, EccChip},
+    fields::{
+        fp2::Fp2Chip, vector::FieldVector, FieldChip, FieldExtConstructor,
+        PrimeFieldChip, Selectable,
+    },
+};
+use std::{hash::Hash, marker::PhantomData};
 
 use crate::native::{Proof, PublicInputs, VerificationKey};
 
