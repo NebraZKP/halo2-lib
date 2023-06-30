@@ -54,20 +54,23 @@ struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
     ),
 }
 
-pub struct BatchVerifier<C1, F, FC>
+pub struct BatchVerifier<C1, C2, F, FC>
 where
     C1: CurveAffineExt,
+    C2: CurveAffineExt,
     F: PrimeField + ScalarField,
     FC: FieldChip<F, FieldType = C1::Base>,
 {
     pub fp_chip: FC,
-    pub _f: PhantomData<(C1, F)>,
+    pub _f: PhantomData<(C1, C2, F)>,
 }
 
-impl<C1, F, FC> BatchVerifier<C1, F, FC>
+impl<C1, C2, F, FC> BatchVerifier<C1, C2, F, FC>
 where
     C1: CurveAffineExt,
     C1::Base: Hash,
+    C2: CurveAffineExt,
+    C2::Base: FieldExtConstructor<C1::Base, 2>,
     F: PrimeField + ScalarField,
     FC: PrimeFieldChip<F, FieldType = C1::Base>
         + Selectable<F, <FC as FieldChip<F>>::FieldPoint>
@@ -81,20 +84,27 @@ where
     pub fn assign_public_inputs(
         self: &Self,
         ctx: &mut Context<F>,
-        inputs: &PublicInputs,
+        inputs: PublicInputs<F>,
     ) -> AssignedPublicInputs<F> {
-        todo!();
+        AssignedPublicInputs(ctx.assign_witnesses(inputs.0))
     }
 
     pub fn assign_proof(
         self: &Self,
         ctx: &mut Context<F>,
-        proof: &Proof,
+        proof: &Proof<C1, C2>,
     ) -> AssignedProof<F, FC> {
-        todo!();
+        let g1_chip = EccChip::new(&self.fp_chip);
+        let fp2_chip = Fp2Chip::<F, FC, C2::Base>::new(&self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
+        AssignedProof {
+            a: g1_chip.assign_point(ctx, proof.a),
+            b: g2_chip.assign_point(ctx, proof.b),
+            c: g1_chip.assign_point(ctx, proof.c),
+        }
     }
 
-    fn prepare_proofs<C2>(
+    fn prepare_proofs(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<C1, C2>,
@@ -102,8 +112,6 @@ where
         r: AssignedValue<F>,
     ) -> AssignedPreparedProof<F, FC>
     where
-        C2: CurveAffineExt,
-        C2::Base: FieldExtConstructor<C1::Base, 2>,
         // there must be a more concise way to express these constraints
         FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
             From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
@@ -220,16 +228,17 @@ where
     /// Execute the top-level batch verification by accumulating (as far as
     /// possible) all proofs and public inputs, and performing a single large
     /// pairing check.
-    pub fn verify<C2>(
+    pub fn verify(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<C1, C2>,
         proofs: Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
-    ) where
-        C2: CurveAffineExt,
-        C2::Base: FieldExtConstructor<C1::Base, 2>,
-    {
-        let r = todo!();
+    ) {
+        // Temporary until r sampling is decided
+        let r = {
+            let ctx = builder.main(0);
+            ctx.assign_witnesses(core::iter::once(F::from(2)))[0] // TODO
+        };
         let prepared = self.prepare_proofs(builder, vk, proofs, r);
         let miller_out = self.multi_miller(builder.main(0), &prepared);
         let final_exp_out =

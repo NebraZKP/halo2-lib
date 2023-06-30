@@ -52,7 +52,8 @@ fn batch_verify_circuit(
         .map(|p_i| {
             (
                 batch_verifier.assign_proof(builder.main(0), &p_i.0),
-                batch_verifier.assign_public_inputs(builder.main(0), &p_i.1),
+                batch_verifier
+                    .assign_public_inputs(builder.main(0), p_i.1.clone()),
             )
         })
         .collect();
@@ -79,10 +80,11 @@ fn test_aggregation_circuit() {
     let inner_vk = load_vk(VK_FILE);
 
     // Read the proofs
-    let inner_proofs_and_inputs: Vec<(Proof, PublicInputs)> = [PROOF1_FILE]
-        .iter()
-        .map(|e| load_proof_and_inputs(*e))
-        .collect();
+    let inner_proofs_and_inputs: Vec<(Proof, PublicInputs)> =
+        [PROOF1_FILE, PROOF2_FILE, PROOF3_FILE]
+            .iter()
+            .map(|e| load_proof_and_inputs(*e))
+            .collect();
 
     // Construct the circuit for this inner_vk.  Generate outer keys.
     let mut builder = GateThreadBuilder::<Fr>::keygen();

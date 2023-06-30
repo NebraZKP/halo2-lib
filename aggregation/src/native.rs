@@ -86,12 +86,14 @@ pub struct JsonProof {
 }
 
 #[derive(Debug)]
-pub struct Proof {
-    pub a: G1Affine,
-    pub b: G2Affine,
-    pub c: G1Affine,
-    // /// Public inputs
-    // pub pi: Vec<Fr>,
+pub struct Proof<C1 = G1Affine, C2 = G2Affine>
+where
+    C1: CurveAffineExt,
+    C2: CurveAffineExt,
+{
+    pub a: C1,
+    pub b: C2,
+    pub c: C1,
 }
 
 /// "Prepared" here means that all curve points have been accumulated and we
@@ -121,8 +123,10 @@ impl From<&JsonProof> for Proof {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JsonPublicInputs(Vec<String>);
 
-#[derive(Debug)]
-pub struct PublicInputs(pub Vec<Fr>);
+#[derive(Clone, Debug)]
+pub struct PublicInputs<F = Fr>(pub Vec<F>)
+where
+    F: PrimeField;
 
 impl From<&JsonPublicInputs> for PublicInputs {
     fn from(json: &JsonPublicInputs) -> Self {
