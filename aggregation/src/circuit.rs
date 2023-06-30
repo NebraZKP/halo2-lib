@@ -4,12 +4,13 @@ use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::gates::GateChip;
 use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
+use halo2_base::halo2_proofs::halo2curves::{CurveAffine, CurveAffineExt};
 use halo2_base::safe_types::GateInstructions;
 use halo2_base::utils::ScalarField;
 use halo2_base::{AssignedValue, Context, QuantumCell};
 use halo2_ecc::ecc::{EcPoint, EccChip};
 use halo2_ecc::fields::vector::FieldVector;
-use halo2_ecc::fields::FieldChip;
+use halo2_ecc::fields::{FieldChip, Selectable};
 
 use crate::native::{Proof, PublicInputs, VerificationKey};
 
@@ -44,12 +45,23 @@ struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
     ),
 }
 
-pub struct BatchVerifier<F: PrimeField + ScalarField, FC: FieldChip<F>> {
+pub struct BatchVerifier<C1, F, FC>
+where
+    C1: CurveAffineExt,
+    F: PrimeField + ScalarField,
+    FC: FieldChip<F, FieldType = C1::Base>,
+{
     pub fp_chip: FC,
-    pub _f: PhantomData<F>,
+    pub _f: PhantomData<(C1, F)>,
 }
 
-impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
+impl<C1, F, FC> BatchVerifier<C1, F, FC>
+where
+    C1: CurveAffineExt,
+    F: PrimeField + ScalarField,
+    FC: FieldChip<F, FieldType = C1::Base>
+        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>,
+{
     pub fn assign_public_inputs(
         self: &Self,
         ctx: &mut Context<F>,
@@ -66,13 +78,16 @@ impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
         todo!();
     }
 
-    fn prepare_proofs(
+    fn prepare_proofs<C2>(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey,
+        vk: &VerificationKey<C1, C2>,
         proofs: Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
-    ) -> AssignedPreparedProof<F, FC> {
+    ) -> AssignedPreparedProof<F, FC>
+    where
+        C2: CurveAffineExt,
+    {
         let ecc_chip = EccChip::new(&self.fp_chip);
 
         let r_powers = scalar_powers(builder.main(0), r, proofs.len());
@@ -135,16 +150,19 @@ impl<F: PrimeField + ScalarField, FC: FieldChip<F>> BatchVerifier<F, FC> {
     /// Execute the top-level batch verification by accumulating (as far as
     /// possible) all proofs and public inputs, and performing a single large
     /// pairing check.
-    pub fn verify(
+    pub fn verify<C2>(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey,
+        vk: &VerificationKey<C1, C2>,
         proofs: Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
-    ) {
+    ) where
+        C2: CurveAffineExt,
+    {
         let r = todo!();
         let prepared = self.prepare_proofs(builder, vk, proofs, r);
         let miller_out = self.multi_miller(builder.main(0), &prepared);
-        let final_exp_out = self.final_exponentiation(builder.main(0), &miller_out);
+        let final_exp_out =
+            self.final_exponentiation(builder.main(0), &miller_out);
         self.check_final_exp(builder.main(0), &final_exp_out);
     }
 }

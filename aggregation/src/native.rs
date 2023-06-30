@@ -4,6 +4,7 @@ use halo2_base::halo2_proofs::halo2curves::bn256::{
     multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
 };
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
+use halo2_base::halo2_proofs::halo2curves::CurveAffineExt;
 
 use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
 use serde::de::DeserializeOwned;
@@ -53,12 +54,16 @@ pub struct JsonVerificationKey {
 }
 
 #[derive(Debug)]
-pub struct VerificationKey {
-    pub alpha: G1Affine,
-    pub beta: G2Affine,
-    pub gamma: G2Affine,
-    pub delta: G2Affine,
-    pub s: Vec<G1Affine>,
+pub struct VerificationKey<C1 = G1Affine, C2 = G2Affine>
+where
+    C1: CurveAffineExt,
+    C2: CurveAffineExt,
+{
+    pub alpha: C1,
+    pub beta: C2,
+    pub gamma: C2,
+    pub delta: C2,
+    pub s: Vec<C1>,
 }
 
 impl From<&JsonVerificationKey> for VerificationKey {
