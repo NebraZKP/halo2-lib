@@ -1,18 +1,24 @@
-use std::marker::PhantomData;
-
 use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::gates::GateChip;
 use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_base::halo2_proofs::halo2curves::{CurveAffine, CurveAffineExt};
+use halo2_base::halo2_proofs::halo2curves::CurveAffineExt;
 use halo2_base::safe_types::GateInstructions;
 use halo2_base::utils::ScalarField;
 use halo2_base::{AssignedValue, Context, QuantumCell};
-use halo2_ecc::ecc::{EcPoint, EccChip};
+use halo2_ecc::ecc::{scalar_multiply, EcPoint, EccChip};
+use halo2_ecc::fields::fp2::Fp2Chip;
 use halo2_ecc::fields::vector::FieldVector;
-use halo2_ecc::fields::{FieldChip, Selectable};
+use halo2_ecc::fields::{
+    FieldChip, FieldExtConstructor, PrimeFieldChip, Selectable,
+};
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 use crate::native::{Proof, PublicInputs, VerificationKey};
+
+/// TODO: Is it worth allowing this to be variable?
+const WINDOW_BITS: usize = 4;
 
 // In-circuit objects
 
@@ -30,16 +36,19 @@ pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
 
 /// In-circuit equivalent of PreparedProof.
 struct AssignedPreparedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
-    pub ab_pairs: Vec<(EcPoint<F, FC::FieldPoint>, EcPoint<F, FC::FieldPoint>)>,
-    pub rP: (
+    pub ab_pairs: Vec<(
+        EcPoint<F, FC::FieldPoint>,
+        EcPoint<F, FieldVector<FC::FieldPoint>>,
+    )>,
+    pub rp: (
         EcPoint<F, FC::FieldPoint>,
         EcPoint<F, FieldVector<FC::FieldPoint>>,
     ),
-    pub ri: (
+    pub pi: (
         EcPoint<F, FC::FieldPoint>,
         EcPoint<F, FieldVector<FC::FieldPoint>>,
     ),
-    pub sc: (
+    pub zc: (
         EcPoint<F, FC::FieldPoint>,
         EcPoint<F, FieldVector<FC::FieldPoint>>,
     ),
@@ -58,9 +67,16 @@ where
 impl<C1, F, FC> BatchVerifier<C1, F, FC>
 where
     C1: CurveAffineExt,
+    C1::Base: Hash,
     F: PrimeField + ScalarField,
-    FC: FieldChip<F, FieldType = C1::Base>
-        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>,
+    FC: PrimeFieldChip<F, FieldType = C1::Base>
+        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>
+        + Selectable<F, <FC as FieldChip<F>>::ReducedFieldPoint>,
+    // todo: simplify these trait bounds
+    FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
+        From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
+    FieldVector<<FC as FieldChip<F>>::FieldPoint>:
+        From<FieldVector<<FC as FieldChip<F>>::ReducedFieldPoint>>,
 {
     pub fn assign_public_inputs(
         self: &Self,
@@ -87,6 +103,16 @@ where
     ) -> AssignedPreparedProof<F, FC>
     where
         C2: CurveAffineExt,
+        C2::Base: FieldExtConstructor<C1::Base, 2>,
+        // there must be a more concise way to express these constraints
+        FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
+            From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
+        FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
+            From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
+        FieldVector<<FC as FieldChip<F>>::FieldPoint>:
+            From<FieldVector<<FC as FieldChip<F>>::ReducedFieldPoint>>,
+        FieldVector<<FC as FieldChip<F>>::FieldPoint>:
+            From<FieldVector<<FC as FieldChip<F>>::ReducedFieldPoint>>,
     {
         let ecc_chip = EccChip::new(&self.fp_chip);
 
@@ -95,31 +121,75 @@ where
         // Process public inputs
         let (proofs, public_inputs): (Vec<_>, Vec<_>) =
             proofs.into_iter().unzip();
-        let processed_public_inputs =
-            process_public_inputs(builder.main(0), r_powers, public_inputs);
+        let processed_public_inputs = process_public_inputs(
+            builder.main(0),
+            r_powers.clone(),
+            public_inputs,
+        );
         // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
         let processed_public_inputs: Vec<_> = processed_public_inputs
             .0
             .into_iter()
             .map(|scalar| vec![scalar])
             .collect();
-        ecc_chip.fixed_base_msm_in(
+        let pi = ecc_chip.fixed_base_msm_in(
             builder,
             &vk.s, // TODO: Make vk generic over field or else make this specialized to Bn base
             processed_public_inputs,
-            Fr::NUM_BITS as usize, // TODO: what's this generically?
-            4,                     // TODO: Just grabbed this from MSM config
-            0,                     // TODO: Do we ever use a non-zero phase?
+            F::NUM_BITS as usize,
+            WINDOW_BITS,
+            0, // TODO: Do we ever use a non-zero phase?
         );
+        let minus_pi = ecc_chip.negate(builder.main(0), pi);
 
+        let (pairs, c_points): (Vec<_>, Vec<_>) = proofs
+            .into_iter()
+            .map(|proof| ((proof.a, proof.b), proof.c))
+            .unzip();
         // Scale (A, B) pairs
-
+        let ab_pairs = scale_pairs::<C1, _, _>(
+            &self.fp_chip,
+            builder.main(0),
+            r_powers.clone(),
+            pairs,
+        );
         // Combine C points
+        let zc = ecc_chip.variable_base_msm_in::<C1>(
+            builder,
+            &c_points,
+            r_powers
+                .iter()
+                .map(|scalar| vec![*scalar])
+                .collect::<Vec<_>>(),
+            F::NUM_BITS as usize,
+            WINDOW_BITS,
+            0,
+        );
+        let minus_zc = ecc_chip.negate(builder.main(0), zc);
 
         // Compute - r_sum * P
+        let gate = GateChip::default();
+        let ctx = builder.main(0);
 
+        let r_sum = gate.sum(ctx, r_powers);
+        let rp = ecc_chip.fixed_base_scalar_mult(
+            ctx,
+            &vk.alpha,
+            vec![r_sum],
+            F::NUM_BITS as usize,
+            WINDOW_BITS,
+        );
+        let minus_rp = ecc_chip.negate(ctx, rp);
         // Load from vk
-        todo!()
+        let fp2_chip = Fp2Chip::<F, FC, C2::Base>::new(&self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
+
+        AssignedPreparedProof {
+            ab_pairs,
+            rp: (minus_rp, g2_chip.assign_constant_point(ctx, vk.beta)),
+            pi: (minus_pi, g2_chip.assign_constant_point(ctx, vk.gamma)),
+            zc: (minus_zc, g2_chip.assign_constant_point(ctx, vk.delta)),
+        }
     }
 
     fn multi_miller(
@@ -157,6 +227,7 @@ where
         proofs: Vec<(AssignedProof<F, FC>, AssignedPublicInputs<F>)>,
     ) where
         C2: CurveAffineExt,
+        C2::Base: FieldExtConstructor<C1::Base, 2>,
     {
         let r = todo!();
         let prepared = self.prepare_proofs(builder, vk, proofs, r);
@@ -170,7 +241,7 @@ where
 /// Return accumulated public inputs
 fn process_public_inputs<F: ScalarField>(
     ctx: &mut Context<F>,
-    powers: Vec<QuantumCell<F>>,
+    powers: Vec<AssignedValue<F>>,
     public_inputs: Vec<AssignedPublicInputs<F>>,
 ) -> AssignedPublicInputs<F> {
     let gate = GateChip::default();
@@ -190,7 +261,7 @@ fn scalar_powers<F: ScalarField>(
     ctx: &mut Context<F>,
     r: AssignedValue<F>,
     len: usize,
-) -> Vec<QuantumCell<F>> {
+) -> Vec<AssignedValue<F>> {
     let gate = GateChip::default();
     let mut result = Vec::with_capacity(len);
     result.push(ctx.load_constant(F::one()).into());
@@ -198,8 +269,44 @@ fn scalar_powers<F: ScalarField>(
     let current = r;
     for _ in 2..len {
         let current = gate.mul(ctx, current, r);
-        result.push(current.into());
+        result.push(current);
     }
     debug_assert_eq!(result.len(), len);
+    result
+}
+
+/// Returns `(scalar_i * A_i, B_i)`
+fn scale_pairs<C1, F, FC>(
+    field_chip: &FC,
+    ctx: &mut Context<F>,
+    scalars: Vec<AssignedValue<F>>,
+    pairs: Vec<(
+        EcPoint<F, FC::FieldPoint>,
+        EcPoint<F, FieldVector<FC::FieldPoint>>,
+    )>,
+) -> Vec<(
+    EcPoint<F, FC::FieldPoint>,
+    EcPoint<F, FieldVector<FC::FieldPoint>>,
+)>
+where
+    C1: CurveAffineExt,
+    F: PrimeField + ScalarField,
+    FC: FieldChip<F, FieldType = C1::Base>
+        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>,
+{
+    let mut result = Vec::with_capacity(pairs.len());
+    for ((g1, g2), scalar) in pairs.into_iter().zip(scalars.into_iter()) {
+        result.push((
+            scalar_multiply::<_, _, C1>(
+                field_chip,
+                ctx,
+                g1,
+                vec![scalar],
+                F::NUM_BITS as usize,
+                WINDOW_BITS,
+            ),
+            g2,
+        ))
+    }
     result
 }

@@ -101,7 +101,7 @@ struct PreparedProof {
     /// Rescaled pairs (r^i * A_i, B_i)
     pub ab_pairs: Vec<(G1Affine, G2Affine)>,
     /// (-sum_i r^i * P, Q)
-    pub rP: (G1Affine, G2Affine),
+    pub rp: (G1Affine, G2Affine),
     /// (-PI, h)
     pub pi: (G1Affine, G2Affine),
     /// (- sum_i r^i C_i, D)
