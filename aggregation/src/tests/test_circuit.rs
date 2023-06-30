@@ -31,7 +31,7 @@ use std::fs::File;
 use std::marker::PhantomData;
 
 fn batch_verify_circuit(
-    ctx: &mut Context<Fr>,
+    builder: &mut GateThreadBuilder<Fr>,
     params: &CircuitParams,
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(Proof, PublicInputs)>,
@@ -51,16 +51,17 @@ fn batch_verify_circuit(
         .iter()
         .map(|p_i| {
             (
-                batch_verifier.assign_proof(ctx, &p_i.0),
-                batch_verifier.assign_public_inputs(ctx, &p_i.1),
+                batch_verifier.assign_proof(builder.main(0), &p_i.0),
+                batch_verifier.assign_public_inputs(builder.main(0), &p_i.1),
             )
         })
         .collect();
 
     // Call `batch_verify`
-    batch_verifier.verify(ctx, vk, &assigned_proofs_and_inputs);
+    batch_verifier.verify(builder, vk, assigned_proofs_and_inputs);
 }
 
+// cargo test --package aggregation --lib --all-features -- tests::test_circuit::test_aggregation_circuit --exact --nocapture
 #[test]
 fn test_aggregation_circuit() {
     // Read parameters from a config file
@@ -86,7 +87,7 @@ fn test_aggregation_circuit() {
     // Construct the circuit for this inner_vk.  Generate outer keys.
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     batch_verify_circuit(
-        builder.main(0),
+        &mut builder,
         &params,
         &inner_vk,
         &inner_proofs_and_inputs,
@@ -109,7 +110,7 @@ fn test_aggregation_circuit() {
     let proof_time = start_timer!(|| "Proving time");
     let mut builder = GateThreadBuilder::<Fr>::prover();
     batch_verify_circuit(
-        builder.main(0),
+        &mut builder,
         &params,
         &inner_vk,
         &inner_proofs_and_inputs,
