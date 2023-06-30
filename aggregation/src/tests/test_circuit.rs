@@ -22,10 +22,7 @@ use halo2_base::halo2_proofs::transcript::{
 use halo2_base::safe_types::RangeChip;
 use halo2_base::utils::fs::gen_srs;
 use halo2_ecc::bn254::FpChip;
-use halo2_ecc::halo2_base::gates::builder::{
-    MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
-};
-use halo2_ecc::halo2_base::Context;
+use halo2_ecc::halo2_base::gates::builder::RangeCircuitBuilder;
 use rand_core::OsRng;
 use std::fs::File;
 use std::marker::PhantomData;

@@ -1,11 +1,10 @@
 use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::gates::GateChip;
-use halo2_base::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G2Affine};
 use halo2_base::halo2_proofs::halo2curves::group::ff::PrimeField;
 use halo2_base::halo2_proofs::halo2curves::CurveAffineExt;
 use halo2_base::safe_types::GateInstructions;
 use halo2_base::utils::ScalarField;
-use halo2_base::{AssignedValue, Context, QuantumCell};
+use halo2_base::{AssignedValue, Context};
 use halo2_ecc::ecc::{scalar_multiply, EcPoint, EccChip};
 use halo2_ecc::fields::fp2::Fp2Chip;
 use halo2_ecc::fields::vector::FieldVector;
@@ -248,7 +247,7 @@ where
 }
 
 /// Return accumulated public inputs
-fn process_public_inputs<F: ScalarField>(
+pub fn process_public_inputs<F: ScalarField>(
     ctx: &mut Context<F>,
     powers: Vec<AssignedValue<F>>,
     public_inputs: Vec<AssignedPublicInputs<F>>,
@@ -266,7 +265,7 @@ fn process_public_inputs<F: ScalarField>(
 }
 
 /// Return r^0, r, ... r^{len - 1}
-fn scalar_powers<F: ScalarField>(
+pub fn scalar_powers<F: ScalarField>(
     ctx: &mut Context<F>,
     r: AssignedValue<F>,
     len: usize,
@@ -275,9 +274,9 @@ fn scalar_powers<F: ScalarField>(
     let mut result = Vec::with_capacity(len);
     result.push(ctx.load_constant(F::one()).into());
     result.push(r.into());
-    let current = r;
+    let mut current = r.clone();
     for _ in 2..len {
-        let current = gate.mul(ctx, current, r);
+        current = gate.mul(ctx, current, r);
         result.push(current);
     }
     debug_assert_eq!(result.len(), len);
@@ -285,7 +284,7 @@ fn scalar_powers<F: ScalarField>(
 }
 
 /// Returns `(scalar_i * A_i, B_i)`
-fn scale_pairs<C1, F, FC>(
+pub fn scale_pairs<C1, F, FC>(
     field_chip: &FC,
     ctx: &mut Context<F>,
     scalars: Vec<AssignedValue<F>>,

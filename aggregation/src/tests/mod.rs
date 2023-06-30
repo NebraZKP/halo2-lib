@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 // pub mod sample_proof;
+mod component;
 mod test_circuit;
 mod test_native;
 
