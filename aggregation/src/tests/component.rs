@@ -1,8 +1,8 @@
 use ark_std::{end_timer, start_timer};
-use halo2_base::halo2_proofs::dev::MockProver;
 use halo2_base::{
     gates::builder::{GateThreadBuilder, RangeCircuitBuilder},
     halo2_proofs::{
+        dev::MockProver,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
         poly::{
@@ -126,7 +126,9 @@ where
     builder.config(k as usize, Some(10));
     let circuit = RangeCircuitBuilder::mock(builder);
 
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k, &circuit, vec![])
+        .unwrap()
+        .assert_satisfied();
 }
 
 pub mod scalar_powers {
@@ -214,6 +216,8 @@ pub mod scale_pairs {
         }
 
         fn build(self, builder: &mut GateThreadBuilder<Fr>) {
+            std::env::set_var("LOOKUP_BITS", self.lookup_bits.to_string());
+
             let ctx = builder.main(0);
             // Randomly sample pairs
             // let pairs = (0..self.len)
@@ -234,10 +238,8 @@ pub mod scale_pairs {
                 .clone()
                 .map(|(a, b)| {
                     (
-                        // fp_chip.load_private(ctx, a.x)
-                        fp_chip.load_private(ctx, Fq::one())
-                        // g1_chip.load_private_unchecked(ctx, (a.x, a.y)),
-                        // g2_chip.load_private_unchecked(ctx, (b.x, b.y)),
+                        g1_chip.load_private::<G1Affine>(ctx, (a.x, a.y)),
+                        g2_chip.load_private::<G2Affine>(ctx, (b.x, b.y)),
                     )
                 })
                 .collect();
@@ -245,29 +247,29 @@ pub mod scale_pairs {
                 scalars.clone().map(|r| ctx.load_witness(r)).collect();
 
             // Scale pairs
-            // let scaled_pairs = scale_pairs::<G1Affine, Fr, _>(
-            //     &fp_chip,
-            //     ctx,
-            //     assigned_scalars,
-            //     assigned_pairs,
-            // );
+            let scaled_pairs = scale_pairs::<G1Affine, Fr, _>(
+                &fp_chip,
+                ctx,
+                assigned_scalars,
+                assigned_pairs,
+            );
 
-            // let answer: Vec<_> = scaled_pairs
-            //     .into_iter()
-            //     .zip(scalars)
-            //     .zip(pairs)
-            //     .map(|((circuit_pair, scalar), (a, b))| {
-            //         let answer = ((a * scalar).to_affine(), b);
-            //         let g1_answer = g1_chip.assign_point(ctx, answer.0);
-            //         println!("Answer: {:?}", answer);
-            //         println!("Computed G1: {:?}", (circuit_pair.0.x.value(), circuit_pair.0.y.value()));
-            //         // println!("Computed G2: {:?}", (circuit_pair.1.x.value(), circuit_pair.1.y.value()));
+            let answer: Vec<_> = scaled_pairs
+                .into_iter()
+                .zip(scalars)
+                .zip(pairs)
+                .map(|((circuit_pair, scalar), (a, b))| {
+                    let answer = ((a * scalar).to_affine(), b);
+                    let g1_answer = g1_chip.assign_point(ctx, answer.0);
+                    println!("Answer: {:?}", answer);
+                    println!("Computed G1: {:?}", (circuit_pair.0.x.value(), circuit_pair.0.y.value()));
+                    // println!("Computed G2: {:?}", (circuit_pair.1.x.value(), circuit_pair.1.y.value()));
 
-            //         g1_chip.assert_equal(ctx, g1_answer, circuit_pair.0);
-            //         let g2_answer = g2_chip.assign_point(ctx, answer.1);
-            //         g2_chip.assert_equal(ctx, g2_answer, circuit_pair.1);
-            //     })
-            //     .collect();
+                    g1_chip.assert_equal(ctx, g1_answer, circuit_pair.0);
+                    let g2_answer = g2_chip.assign_point(ctx, answer.1);
+                    g2_chip.assert_equal(ctx, g2_answer, circuit_pair.1);
+                })
+                .collect();
         }
     }
 
@@ -312,6 +314,8 @@ pub mod fp_mul {
         }
 
         fn build(self, builder: &mut GateThreadBuilder<Fr>) {
+            std::env::set_var("LOOKUP_BITS", self.lookup_bits.to_string());
+
             let ctx = builder.main(0);
 
             let a = Fq::random(OsRng);
@@ -321,8 +325,6 @@ pub mod fp_mul {
                 FpChip::<_, Fq>::new(&range, self.limb_bits, self.num_limbs);
             let assign_a = fp_chip.load_private(ctx, a);
             let assign_b = fp_chip.load_private(ctx, b);
-            // let ab = fp_chip.mul_no_carry(ctx, assign_a, assign_b);
-            // fp_chip.carry_mod(ctx, ab);
             let ab = fp_chip.mul(ctx, assign_a, assign_b);
         }
     }
