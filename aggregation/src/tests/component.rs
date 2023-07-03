@@ -1,4 +1,5 @@
 use ark_std::{end_timer, start_timer};
+use halo2_base::halo2_proofs::dev::MockProver;
 use halo2_base::{
     gates::builder::{GateThreadBuilder, RangeCircuitBuilder},
     halo2_proofs::{
@@ -33,7 +34,7 @@ pub trait TestCircuit<F: ScalarField> {
 }
 
 /// Test a circuit from a config located at `path`.
-pub fn test_component<'de, P>(path: impl AsRef<Path>)
+pub fn test_component<P>(path: impl AsRef<Path>)
 where
     P: Copy + DeserializeOwned + TestCircuit<Fr>,
 {
@@ -66,10 +67,10 @@ where
     let proof_time = start_timer!(|| "Proving time");
     let mut builder = GateThreadBuilder::<Fr>::prover();
     params.build(&mut builder);
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::prover(builder, break_points);
+    let computed_params = builder.config(k as usize, Some(20));
+    println!("Computed config: {computed_params:?}");
 
-    //Create proof
+    let circuit = RangeCircuitBuilder::prover(builder, break_points);
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     create_proof::<
         KZGCommitmentScheme<Bn256>,
@@ -105,6 +106,29 @@ where
     end_timer!(verify_time);
 }
 
+/// Run `MockProver` on a circuit from a config located at `path`.
+/// This often gives more informative error messages.
+pub fn mock_test_component<P>(path: impl AsRef<Path>)
+where
+    P: Copy + DeserializeOwned + TestCircuit<Fr>,
+{
+    let params: P = serde_json::from_reader(
+        File::open(path)
+            .unwrap_or_else(|e| panic!("Path does not exist: {e:?}")),
+    )
+    .unwrap();
+    let rng = OsRng;
+    let k = params.degree();
+    let kzg_params = gen_srs(k);
+
+    let mut builder = GateThreadBuilder::<Fr>::mock();
+    params.build(&mut builder);
+    builder.config(k as usize, Some(10));
+    let circuit = RangeCircuitBuilder::mock(builder);
+
+    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
 pub mod scalar_powers {
     use super::*;
     use crate::circuit::scalar_powers;
@@ -138,10 +162,182 @@ pub mod scalar_powers {
             }
         }
     }
+
     // cargo test --package aggregation --lib --all-features -- tests::component::scalar_powers::test --exact --nocapture
     #[test]
     fn test() {
         let path = "src/tests/configs/scalar_powers.config";
         test_component::<ScalarPowerCircuit>(path)
+    }
+
+    // cargo test --package aggregation --lib --all-features -- tests::component::scalar_powers::mock_test --exact --nocapture
+    #[test]
+    fn mock_test() {
+        let path = "src/tests/configs/scalar_powers.config";
+        mock_test_component::<ScalarPowerCircuit>(path)
+    }
+}
+
+pub mod scale_pairs {
+    use halo2_base::{
+        gates::RangeChip,
+        halo2_proofs::{
+            arithmetic::Field,
+            halo2curves::{
+                bn256::{Fq, Fq2, G2Affine},
+                group::Curve,
+            },
+        },
+    };
+    use halo2_ecc::{
+        ecc::EccChip,
+        fields::{fp::FpChip, fp2::Fp2Chip, FieldChip},
+    };
+
+    use super::*;
+    use crate::circuit::scale_pairs;
+
+    #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+    /// A circuit to compute `(scalar_i * A_i, B_i)`
+    pub struct ScalePairsCircuit {
+        degree: u32,
+        lookup_bits: usize,
+        limb_bits: usize,
+        num_limbs: usize,
+        /// Number of pairs to scale
+        len: usize,
+    }
+
+    impl TestCircuit<Fr> for ScalePairsCircuit {
+        fn degree(self) -> u32 {
+            self.degree
+        }
+
+        fn build(self, builder: &mut GateThreadBuilder<Fr>) {
+            let ctx = builder.main(0);
+            // Randomly sample pairs
+            // let pairs = (0..self.len)
+            //     .map(|_| (G1Affine::random(OsRng), G2Affine::random(OsRng)));
+            let pairs = (0..self.len)
+                .map(|_| (G1Affine::generator(), G2Affine::generator()));
+            // Randomly sample scalars
+            let scalars = (0..self.len).map(|_| Fr::random(OsRng));
+
+            // Assign points
+            let range = RangeChip::<Fr>::default(self.lookup_bits);
+            let fp_chip =
+                FpChip::<_, Fq>::new(&range, self.limb_bits, self.num_limbs);
+            let g1_chip = EccChip::new(&fp_chip);
+            let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
+            let g2_chip = EccChip::new(&fp2_chip);
+            let assigned_pairs: Vec<_> = pairs
+                .clone()
+                .map(|(a, b)| {
+                    (
+                        // fp_chip.load_private(ctx, a.x)
+                        fp_chip.load_private(ctx, Fq::one())
+                        // g1_chip.load_private_unchecked(ctx, (a.x, a.y)),
+                        // g2_chip.load_private_unchecked(ctx, (b.x, b.y)),
+                    )
+                })
+                .collect();
+            let assigned_scalars: Vec<_> =
+                scalars.clone().map(|r| ctx.load_witness(r)).collect();
+
+            // Scale pairs
+            // let scaled_pairs = scale_pairs::<G1Affine, Fr, _>(
+            //     &fp_chip,
+            //     ctx,
+            //     assigned_scalars,
+            //     assigned_pairs,
+            // );
+
+            // let answer: Vec<_> = scaled_pairs
+            //     .into_iter()
+            //     .zip(scalars)
+            //     .zip(pairs)
+            //     .map(|((circuit_pair, scalar), (a, b))| {
+            //         let answer = ((a * scalar).to_affine(), b);
+            //         let g1_answer = g1_chip.assign_point(ctx, answer.0);
+            //         println!("Answer: {:?}", answer);
+            //         println!("Computed G1: {:?}", (circuit_pair.0.x.value(), circuit_pair.0.y.value()));
+            //         // println!("Computed G2: {:?}", (circuit_pair.1.x.value(), circuit_pair.1.y.value()));
+
+            //         g1_chip.assert_equal(ctx, g1_answer, circuit_pair.0);
+            //         let g2_answer = g2_chip.assign_point(ctx, answer.1);
+            //         g2_chip.assert_equal(ctx, g2_answer, circuit_pair.1);
+            //     })
+            //     .collect();
+        }
+    }
+
+    // cargo test --package aggregation --lib --all-features -- tests::component::scale_pairs::test --exact --nocapture
+    #[test]
+    fn test() {
+        let path = "src/tests/configs/scale_pairs.config";
+        test_component::<ScalePairsCircuit>(path)
+    }
+}
+
+pub mod fp_mul {
+    use halo2_base::{
+        gates::RangeChip,
+        halo2_proofs::{
+            arithmetic::Field,
+            halo2curves::{
+                bn256::{Fq, Fq2, G2Affine},
+                group::Curve,
+            },
+        },
+    };
+    use halo2_ecc::{
+        ecc::EccChip,
+        fields::{fp::FpChip, fp2::Fp2Chip, FieldChip},
+    };
+
+    use super::*;
+
+    #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+    /// Circuit for a single non-native multiplication
+    pub struct FpMulCircuit {
+        degree: u32,
+        lookup_bits: usize,
+        limb_bits: usize,
+        num_limbs: usize,
+    }
+
+    impl TestCircuit<Fr> for FpMulCircuit {
+        fn degree(self) -> u32 {
+            self.degree
+        }
+
+        fn build(self, builder: &mut GateThreadBuilder<Fr>) {
+            let ctx = builder.main(0);
+
+            let a = Fq::random(OsRng);
+            let b = Fq::random(OsRng);
+            let range = RangeChip::<Fr>::default(self.lookup_bits);
+            let fp_chip =
+                FpChip::<_, Fq>::new(&range, self.limb_bits, self.num_limbs);
+            let assign_a = fp_chip.load_private(ctx, a);
+            let assign_b = fp_chip.load_private(ctx, b);
+            // let ab = fp_chip.mul_no_carry(ctx, assign_a, assign_b);
+            // fp_chip.carry_mod(ctx, ab);
+            let ab = fp_chip.mul(ctx, assign_a, assign_b);
+        }
+    }
+
+    // cargo test --package aggregation --lib --all-features -- tests::component::fp_mul::test --exact --nocapture
+    #[test]
+    fn test() {
+        let path = "src/tests/configs/fp_mul.config";
+        test_component::<FpMulCircuit>(path)
+    }
+
+    // cargo test --package aggregation --lib --all-features -- tests::component::fp_mul::mock_test --exact --nocapture
+    #[test]
+    fn mock_test() {
+        let path = "src/tests/configs/fp_mul.config";
+        mock_test_component::<FpMulCircuit>(path)
     }
 }

@@ -107,6 +107,7 @@ fn random_msm_circuit(
     circuit
 }
 
+// cargo test --package halo2-ecc --lib --features halo2-axiom,display -- bn254::tests::msm::test_msm --exact --nocapture
 #[test]
 fn test_msm() {
     let path = "configs/bn254/msm_circuit.config";
