@@ -144,13 +144,6 @@ fn test_pi_accumulation() {
 #[test]
 #[allow(non_snake_case)]
 fn test_compute_ZC() {
-    let vk = VerificationKey {
-        alpha: encode(2),
-        beta: encode_g2(3),
-        gamma: encode_g2(1),
-        delta: encode_g2(5),
-        s: vec![encode(11)],
-    };
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
@@ -194,13 +187,6 @@ fn test_compute_ZC() {
 #[test]
 #[allow(non_snake_case)]
 fn test_compute_r_i_A_i_B_i() {
-    let vk = VerificationKey {
-        alpha: encode(2),
-        beta: encode_g2(3),
-        gamma: encode_g2(1),
-        delta: encode_g2(5),
-        s: vec![encode(11)],
-    };
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
@@ -248,20 +234,12 @@ fn test_compute_r_i_A_i_B_i() {
 #[test]
 #[allow(non_snake_case)]
 fn test_compute_pi_2() {
-    // let vk = VerificationKey {
-    //     alpha: encode(2),
-    //     beta: encode_g2(3),
-    //     gamma: encode_g2(1),
-    //     delta: encode_g2(5),
-    //     s: vec![encode(11), encode(13), encode(17), encode(19)],
-    // };
     let vk = load_vk(VK_FILE);
 
     let (proof1, inputs1) = load_proof_and_inputs(PROOF1_FILE);
     let (proof2, inputs2) = load_proof_and_inputs(PROOF2_FILE);
     let (proof3, inputs3) = load_proof_and_inputs(PROOF3_FILE);
 
-    // let r = Fr::from(7); // Fr::random(OsRng);
     let r = Fr::random(OsRng);
 
     // Perform the computation explicitly for 3 proofs
@@ -271,11 +249,11 @@ fn test_compute_pi_2() {
     assert!(verify(&vk, &proof3, &inputs3));
 
     let pi1 = prepare_public_inputs(&vk, &inputs1);
-    let pi2 = prepare_public_inputs(&vk, &inputs2);
+    let _pi2 = prepare_public_inputs(&vk, &inputs2);
     let pi3 = prepare_public_inputs(&vk, &inputs3);
     let num_proofs = 3;
 
-    let PI_computed = G1Affine::from(-(pi1 + (pi3 * r)));
+    let _PI_computed = G1Affine::from(-(pi1 + (pi3 * r)));
     let r_powers = batch_verify_compute_r_powers(r, num_proofs);
     let sum_r_powers = r_powers.iter().copied().reduce(|a, b| a + b).unwrap();
 
@@ -314,7 +292,7 @@ fn test_groth16_batch_verify() {
     let vk = load_vk(VK_FILE);
 
     let (proof1, inputs1) = load_proof_and_inputs(PROOF1_FILE);
-    let (proof2, inputs2) = load_proof_and_inputs(PROOF2_FILE);
+    let (proof2, _inputs2) = load_proof_and_inputs(PROOF2_FILE);
     let (proof3, inputs3) = load_proof_and_inputs(PROOF3_FILE);
     let r = Fr::random(OsRng);
 

@@ -127,9 +127,7 @@ where
     let params_reader = BufReader::new(params_file);
     for line in params_reader.lines() {
         let params: P = serde_json::from_str(line.unwrap().as_str()).unwrap();
-        let rng = OsRng;
         let k = params.degree();
-        let kzg_params = gen_srs(k);
 
         let mut builder = GateThreadBuilder::<Fr>::mock();
         params.build(&mut builder);
@@ -264,18 +262,16 @@ pub mod scale_pairs {
             let scaled_pairs =
                 scale_pairs::<Fr>(&fp_chip, ctx, assigned_r, assigned_pairs);
 
-            let answer: Vec<_> = scaled_pairs
-                .into_iter()
-                .zip(scalars)
-                .zip(pairs)
-                .map(|((circuit_pair, scalar), (a, b))| {
-                    let answer = ((a * scalar).to_affine(), b);
-                    let g1_answer = g1_chip.assign_point(ctx, answer.0);
-                    println!("Answer: {:?}", answer);
-                    println!(
-                        "Computed G1: {:?}",
-                        (circuit_pair.0.x.value(), circuit_pair.0.y.value())
-                    );
+            // Compute answers, assign to circuit
+            let assigned_answers: Vec<_> = a
+                .iter()
+                .zip(b.iter())
+                .zip(r.iter())
+                .map(|((a, b), r)| {
+                    (
+                        g1_chip.assign_point(ctx, G1Affine::from(a * r)),
+                        g2_chip.assign_point(ctx, b.clone()),
+                    )
                 })
                 .collect();
 
@@ -302,18 +298,9 @@ pub mod scale_pairs {
 pub mod fp_mul {
     use halo2_base::{
         gates::RangeChip,
-        halo2_proofs::{
-            arithmetic::Field,
-            halo2curves::{
-                bn256::{Fq, Fq2, G2Affine},
-                group::Curve,
-            },
-        },
+        halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fq},
     };
-    use halo2_ecc::{
-        ecc::EccChip,
-        fields::{fp::FpChip, fp2::Fp2Chip, FieldChip},
-    };
+    use halo2_ecc::fields::{fp::FpChip, FieldChip};
 
     use super::*;
 
@@ -343,7 +330,7 @@ pub mod fp_mul {
                 FpChip::<_, Fq>::new(&range, self.limb_bits, self.num_limbs);
             let assign_a = fp_chip.load_private(ctx, a);
             let assign_b = fp_chip.load_private(ctx, b);
-            let ab = fp_chip.mul(ctx, assign_a, assign_b);
+            let _ab = fp_chip.mul(ctx, assign_a, assign_b);
         }
     }
 
@@ -367,10 +354,7 @@ pub mod multi_pairing {
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::{
             arithmetic::Field,
-            halo2curves::{
-                bn256::{Fq, Fq2, G2Affine, Gt},
-                group::ff::PrimeField,
-            },
+            halo2curves::bn256::{Fq, Fq2, G2Affine, Gt},
         },
         Context,
     };
@@ -564,28 +548,16 @@ pub mod pairing_check {
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::{
             arithmetic::Field,
-            halo2curves::{
-                bn256::{Fq, Fq12, Fq2, Fq6, G2Affine, Gt},
-                group::ff::PrimeField,
-            },
+            halo2curves::bn256::{Fq, Fq12, G2Affine},
         },
-        Context,
     };
     use halo2_ecc::{
-        bn254::{Fp12Chip, FqPoint},
-        ecc::{EcPoint, EccChip},
-        fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
+        bn254::Fp12Chip,
+        fields::{fp::FpChip, FieldChip},
     };
     use std::marker::PhantomData;
 
-    use crate::{
-        circuit::{AssignedPreparedProof, BatchVerifier},
-        native::{
-            batch_verify_compute_prepared_proof,
-            batch_verify_get_pairing_pairs, load_proof_and_inputs, load_vk,
-            pairing, PreparedProof,
-        },
-    };
+    use crate::circuit::BatchVerifier;
 
     use super::{super::*, *};
 
@@ -622,8 +594,8 @@ pub mod pairing_check {
             let fp12_one = Fq12::one();
 
             let fp12_chip = Fp12Chip::<Fr>::new(&fp_chip);
-            let pairing_result = fp12_chip.load_private(ctx, fp12_one);
-            batch_verifier.check_pairing_result(ctx, &pairing_result);
+            let pairing_result = fp12_chip.load_private(&mut ctx, fp12_one);
+            batch_verifier.check_pairing_result(&mut ctx, &pairing_result);
         }
     }
 

@@ -46,3 +46,7 @@ jobs:
           cargo test --release -- --nocapture bench_msm
           mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
+      - name: Run aggregation tests
+        working-directory: 'aggregation'
+        run: |
+          cargo test --features strict -- --test-threads=1 --show-output

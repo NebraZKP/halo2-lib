@@ -33,6 +33,14 @@ use halo2_ecc::{
 use rand_core::OsRng;
 use std::{fs::File, iter::once, marker::PhantomData};
 
+#[derive(Clone, Copy, Debug, Deserialize)]
+struct CircuitParams {
+    degree: u32,
+    limb_bits: usize,
+    num_limbs: usize,
+    lookup_bits: usize,
+}
+
 fn batch_verify_circuit(
     builder: &mut GateThreadBuilder<Fr>,
     params: &CircuitParams,

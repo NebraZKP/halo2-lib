@@ -13,3 +13,7 @@ serde_json = "1.0"
 
 [dev-dependencies]
 ark-std = { version = "0.3.0", features = ["print-trace"] }
+
+[features]
+# Warnings as errors
+strict = []
