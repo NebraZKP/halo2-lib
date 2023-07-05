@@ -100,33 +100,15 @@ fn test_pi_accumulation() {
     // f_2 = 6 + 10*7 + 14*49 + 18*343 = 6 + 70 + 686 +6147 = 6936
     assert!(
         Fr::from(400)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                0
-            )
+            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 0)
     );
     assert!(
         Fr::from(6136)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                1
-            )
+            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 1)
     );
     assert!(
         Fr::from(6936)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                2
-            )
+            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 2)
     );
 
     // Manually compute one proof at a time.
@@ -160,6 +142,7 @@ fn test_pi_accumulation() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_ZC() {
     let vk = VerificationKey {
         alpha: encode(2),
@@ -202,7 +185,6 @@ fn test_compute_ZC() {
     assert!(
         expect
             == batch_verify_compute_minus_ZC(
-                &vk,
                 &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
                 &r_powers
             )
@@ -210,6 +192,7 @@ fn test_compute_ZC() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_r_i_A_i_B_i() {
     let vk = VerificationKey {
         alpha: encode(2),
@@ -255,7 +238,6 @@ fn test_compute_r_i_A_i_B_i() {
     ];
 
     let r_i_A_i_B_i = batch_verify_compute_r_i_A_i_B_i(
-        &vk,
         &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
         &r_powers,
     );
@@ -264,6 +246,7 @@ fn test_compute_r_i_A_i_B_i() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_pi_2() {
     // let vk = VerificationKey {
     //     alpha: encode(2),
@@ -299,14 +282,10 @@ fn test_compute_pi_2() {
     // f_is
 
     let inputs = vec![&inputs1, &inputs2, &inputs3];
-    let f_0 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 0);
-    let f_1 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 1);
-    let f_2 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 2);
-    let f_3 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 3);
+    let f_0 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 0);
+    let f_1 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 1);
+    let f_2 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 2);
+    let f_3 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 3);
     assert!(f_0 == sum_r_powers);
     assert!(f_1 == (inputs1.0[0] + inputs2.0[0] * r + inputs3.0[0] * r * r));
     assert!(f_2 == (inputs1.0[1] + inputs2.0[1] * r + inputs3.0[1] * r * r));

@@ -2,8 +2,7 @@ use std::fs::File;
 
 use halo2_base::halo2_proofs::halo2curves::{
     bn256::{
-        multi_miller_loop, Fq, Fq12, Fq2, Fr, G1Affine, G2Affine, G2Prepared,
-        Gt, G1,
+        multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
     },
     group::ff::PrimeField,
     CurveAffineExt,
@@ -229,7 +228,7 @@ pub(crate) fn batch_verify_compute_r_powers(
     let mut powers = Vec::<Fr>::with_capacity(num_powers);
     powers.push(Fr::from(1));
     powers.push(r);
-    for i in 2..num_powers {
+    for _ in 2..num_powers {
         powers.push(powers.last().unwrap() * r);
     }
 
@@ -238,7 +237,6 @@ pub(crate) fn batch_verify_compute_r_powers(
 }
 
 pub(crate) fn batch_verify_compute_f_j(
-    s: &Vec<G1Affine>,
     inputs: &Vec<&PublicInputs>,
     r_powers: &Vec<Fr>,
     sum_r_powers: &Fr,
@@ -263,7 +261,6 @@ pub(crate) fn batch_verify_compute_minus_pi(
     r_powers: &Vec<Fr>,
     sum_r_powers: Fr,
 ) -> G1Affine {
-    let num_proofs = inputs.len();
     let num_inputs = inputs[0].0.len();
     assert!(s.len() == num_inputs + 1);
 
@@ -279,10 +276,10 @@ pub(crate) fn batch_verify_compute_minus_pi(
     //   f_j = \sum_{0}^{n-1} r^i = PI_{i,j-1}
 
     let mut pi =
-        s[0] * batch_verify_compute_f_j(s, inputs, r_powers, &sum_r_powers, 0);
+        s[0] * batch_verify_compute_f_j(inputs, r_powers, &sum_r_powers, 0);
     for j in 1..num_inputs + 1 {
-        let pi_i = s[j]
-            * batch_verify_compute_f_j(s, inputs, r_powers, &sum_r_powers, j);
+        let pi_i =
+            s[j] * batch_verify_compute_f_j(inputs, r_powers, &sum_r_powers, j);
 
         pi = pi + pi_i;
     }
@@ -290,8 +287,8 @@ pub(crate) fn batch_verify_compute_minus_pi(
     G1Affine::from(-pi)
 }
 
+#[allow(non_snake_case)]
 pub(crate) fn batch_verify_compute_minus_ZC(
-    vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> G1Affine {
@@ -304,8 +301,8 @@ pub(crate) fn batch_verify_compute_minus_ZC(
     G1Affine::from(-z_C)
 }
 
+#[allow(non_snake_case)]
 pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
-    vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> Vec<(G1Affine, G2Affine)> {
@@ -318,6 +315,7 @@ pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
     A_i_r_is.zip(B_is).collect()
 }
 
+#[allow(non_snake_case)]
 pub(crate) fn batch_verify_compute_prepared_proof(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
@@ -325,7 +323,6 @@ pub(crate) fn batch_verify_compute_prepared_proof(
 ) -> PreparedProof {
     let num_proofs = proofs_and_inputs.len();
     assert!(num_proofs > 0);
-    let num_inputs = proofs_and_inputs[0].1 .0.len();
     let r_powers: Vec<Fr> = batch_verify_compute_r_powers(r, num_proofs);
     assert!(r_powers[0] == Fr::from(1));
     assert!(r_powers[num_proofs - 1] == r_powers[1] * r_powers[num_proofs - 2]);
@@ -347,7 +344,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
     // Compute z_C
 
     let minus_z_C: G1Affine =
-        batch_verify_compute_minus_ZC(vk, proofs_and_inputs, &r_powers);
+        batch_verify_compute_minus_ZC(proofs_and_inputs, &r_powers);
 
     // Compute ( \sum_i r^i ) * P
 
@@ -356,7 +353,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
     // Construct (A_i * r^i, B_i)
 
     let r_i_A_i_B_i =
-        batch_verify_compute_r_i_A_i_B_i(vk, proofs_and_inputs, &r_powers);
+        batch_verify_compute_r_i_A_i_B_i(proofs_and_inputs, &r_powers);
 
     PreparedProof {
         ab_pairs: r_i_A_i_B_i,

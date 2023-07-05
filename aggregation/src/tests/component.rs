@@ -3,10 +3,7 @@ use halo2_base::{
     gates::builder::{GateThreadBuilder, RangeCircuitBuilder},
     halo2_proofs::{
         dev::MockProver,
-        halo2curves::{
-            bn256::{Bn256, Fr, G1Affine},
-            group::Group,
-        },
+        halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
         poly::{
             commitment::ParamsProver,
@@ -23,14 +20,12 @@ use halo2_base::{
     },
     utils::{fs::gen_srs, ScalarField},
 };
-use halo2_ecc::fields::{FieldChip, FieldExtConstructor};
 use rand_core::OsRng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     fmt::Debug,
     fs::File,
     io::{BufRead, BufReader},
-    iter::once,
     path::Path,
 };
 
@@ -201,15 +196,12 @@ pub mod scale_pairs {
         gates::RangeChip,
         halo2_proofs::{
             arithmetic::Field,
-            halo2curves::{
-                bn256::{Fq, Fq2, G2Affine},
-                group::Curve,
-            },
+            halo2curves::bn256::{Fq, Fq2, G2Affine},
         },
     };
     use halo2_ecc::{
         ecc::EccChip,
-        fields::{fp::FpChip, fp2::Fp2Chip, FieldChip},
+        fields::{fp::FpChip, fp2::Fp2Chip},
     };
 
     use super::*;
@@ -269,12 +261,8 @@ pub mod scale_pairs {
                 .unzip();
 
             // Scale pairs
-            let scaled_pairs = scale_pairs::<Fr>(
-                &fp_chip,
-                ctx,
-                assigned_r,
-                assigned_pairs,
-            );
+            let scaled_pairs =
+                scale_pairs::<Fr>(&fp_chip, ctx, assigned_r, assigned_pairs);
 
             let answer: Vec<_> = scaled_pairs
                 .into_iter()
