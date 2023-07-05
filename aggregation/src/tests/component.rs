@@ -75,11 +75,6 @@ pub mod scale_pairs {
         len: usize,
     }
 
-    // impl TestCircuit<Fr> for ScalePairsCircuit {
-    //     fn degree(self) -> u32 {
-    //         self.degree
-    //     }
-
     fn build_circuit(
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,

@@ -54,7 +54,7 @@ pub struct JsonVerificationKey {
     pub s: Vec<[String; 2]>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VerificationKey<C1 = G1Affine, C2 = G2Affine>
 where
     C1: CurveAffineExt,
@@ -79,14 +79,14 @@ impl From<&JsonVerificationKey> for VerificationKey {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonProof {
     pub a: [String; 2],
     pub b: [[String; 2]; 2],
     pub c: [String; 2],
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Proof<C1 = G1Affine, C2 = G2Affine>
 where
     C1: CurveAffineExt,
@@ -149,7 +149,7 @@ pub fn load_vk(filename: &str) -> VerificationKey {
 }
 
 pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Deserialize)]
     struct JsonProofAndInputs {
         proof: JsonProof,
         inputs: JsonPublicInputs,
