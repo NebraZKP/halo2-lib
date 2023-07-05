@@ -1,40 +1,16 @@
-use std::arch::aarch64::vfms_f32;
-
 use super::*;
 use crate::native::{
-    batch_verify, batch_verify_compute_f_j, batch_verify_compute_miller_pairs,
-    batch_verify_compute_minus_ZC, batch_verify_compute_minus_pi,
-    batch_verify_compute_r_i_A_i_B_i, batch_verify_compute_r_powers,
-    load_proof_and_inputs, load_vk, prepare_public_inputs, verify, Proof,
-    PublicInputs, VerificationKey,
+    batch_verify, batch_verify_compute_f_j, batch_verify_compute_minus_ZC,
+    batch_verify_compute_minus_pi, batch_verify_compute_r_i_A_i_B_i,
+    batch_verify_compute_r_powers, load_proof_and_inputs, load_vk,
+    prepare_public_inputs, verify, Proof, PublicInputs, VerificationKey,
 };
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
-    halo2curves::{
-        bn256::{
-            multi_miller_loop, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1, G2,
-        },
-        pairing::MillerLoopResult,
-    },
+    halo2curves::bn256::{Fr, G1Affine},
 };
 
 use rand_core::OsRng;
-
-fn encode(f: i32) -> G1Affine {
-    G1Affine::from(G1::generator() * Fr::from(f as u64))
-}
-
-fn encode_g2(f: i32) -> G2Affine {
-    G2Affine::from(G2::generator() * Fr::from(f as u64))
-}
-
-fn encode_fr(f: &Fr) -> G1Affine {
-    G1Affine::from(G1::generator() * f)
-}
-
-fn encode_vec(fs: &Vec<i32>) -> Vec<G1Affine> {
-    fs.iter().map(|a| encode(*a)).collect()
-}
 
 #[test]
 fn test_load_groth16() {

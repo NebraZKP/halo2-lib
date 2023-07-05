@@ -2,7 +2,8 @@ use std::fs::File;
 
 use halo2_base::halo2_proofs::halo2curves::{
     bn256::{
-        multi_miller_loop, Fq, Fq2, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1,
+        multi_miller_loop, Fq, Fq12, Fq2, Fr, G1Affine, G2Affine, G2Prepared,
+        Gt, G1,
     },
     group::ff::PrimeField,
     CurveAffineExt,
@@ -100,7 +101,7 @@ where
 /// "Prepared" here means that all curve points have been accumulated and we
 /// have a sequence of pairs of G1 and G2 points ready for passing to a
 /// multi-Miller loop.
-struct PreparedProof {
+pub(crate) struct PreparedProof {
     /// Rescaled pairs (r^i * A_i, B_i)
     pub ab_pairs: Vec<(G1Affine, G2Affine)>,
     /// (-sum_i r^i * P, Q)
@@ -162,7 +163,7 @@ pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
     )
 }
 
-pub fn prepare_public_inputs(
+pub(crate) fn prepare_public_inputs(
     vk: &VerificationKey,
     inputs: &PublicInputs,
 ) -> G1Affine {
@@ -173,13 +174,21 @@ pub fn prepare_public_inputs(
     G1Affine::from(pi)
 }
 
-pub(crate) fn check_miller_pairs(
-    pairs: &Vec<(&G1Affine, &G2Prepared)>,
-) -> bool {
+pub(crate) fn pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> Gt {
+    // Store the prepared G2 elements, so we can create references to them.
+    let prepared_g2: Vec<G2Prepared> =
+        pairs.iter().map(|(_, b)| G2Prepared::from(**b)).collect();
+    let pairs: Vec<(&G1Affine, &G2Prepared)> = pairs
+        .iter()
+        .zip(prepared_g2.iter())
+        .map(|((a, _), b)| (*a, b))
+        .collect();
     let miller_out = multi_miller_loop(pairs.as_slice());
-    let pairing_out = miller_out.final_exponentiation();
-    println!("PAIRING OUT: {pairing_out:?}");
-    // Pairing check
+    miller_out.final_exponentiation()
+}
+
+pub(crate) fn check_pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> bool {
+    let pairing_out = pairing(pairs);
     pairing_out == Gt::identity()
 }
 
@@ -204,11 +213,11 @@ pub fn verify(
     //     (&-proof.c, &G2Prepared::from_affine(vk.delta)),
     // ])
 
-    check_miller_pairs(&vec![
-        (&proof.a, &G2Prepared::from_affine(proof.b)),
-        (&-vk.alpha, &G2Prepared::from_affine(vk.beta)),
-        (&-pi, &G2Prepared::from_affine(G2Affine::generator())),
-        (&-proof.c, &G2Prepared::from_affine(vk.delta)),
+    check_pairing(&vec![
+        (&proof.a, &proof.b),
+        (&-vk.alpha, &vk.beta),
+        (&-pi, &G2Affine::generator()),
+        (&-proof.c, &vk.delta),
     ])
 }
 
@@ -309,11 +318,11 @@ pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
     A_i_r_is.zip(B_is).collect()
 }
 
-pub(crate) fn batch_verify_compute_miller_pairs(
+pub(crate) fn batch_verify_compute_prepared_proof(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r: Fr,
-) -> Vec<(G1Affine, G2Prepared)> {
+) -> PreparedProof {
     let num_proofs = proofs_and_inputs.len();
     assert!(num_proofs > 0);
     let num_inputs = proofs_and_inputs[0].1 .0.len();
@@ -349,31 +358,38 @@ pub(crate) fn batch_verify_compute_miller_pairs(
     let r_i_A_i_B_i =
         batch_verify_compute_r_i_A_i_B_i(vk, proofs_and_inputs, &r_powers);
 
-    // Miller pairs
-
-    let miller_pairs = r_i_A_i_B_i
-        .iter()
-        .copied()
-        .chain(once((minus_r_P, vk.beta)))
-        .chain(once((minus_pi, G2Affine::generator())))
-        .chain(once((minus_z_C, vk.delta)));
-    let miller_pairs = miller_pairs.map(|(a, b)| (a, G2Prepared::from(b)));
-
-    let miller_pairs: Vec<(G1Affine, G2Prepared)> = miller_pairs.collect();
-
-    miller_pairs
+    PreparedProof {
+        ab_pairs: r_i_A_i_B_i,
+        rp: (minus_r_P, vk.beta),
+        pi: (minus_pi, G2Affine::generator()),
+        zc: (minus_z_C, vk.delta),
+    }
 }
+
+pub(crate) fn batch_verify_get_pairing_pairs<'a>(
+    prep_proof: &'a PreparedProof,
+) -> Vec<(&'a G1Affine, &'a G2Affine)> {
+    let miller_pairs = prep_proof
+        .ab_pairs
+        .iter()
+        .chain(once(&prep_proof.rp))
+        .chain(once(&prep_proof.pi))
+        .chain(once(&prep_proof.zc))
+        .map(|(a, b)| (a, b));
+    miller_pairs.collect()
+}
+
+// TODO: it's useful to break up the construction of the pairs, and the
+// preparation, for testing the circuit.  However, we should be able to use
+// iterators and only allocate at the end.
 
 pub fn batch_verify(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r: Fr,
 ) -> bool {
-    let miller_pairs =
-        batch_verify_compute_miller_pairs(vk, proofs_and_inputs, r);
-    let miller_pair_refs: Vec<(&G1Affine, &G2Prepared)> = miller_pairs
-        .iter()
-        .map(|(a, b)| (a, b))
-        .collect::<Vec<(&G1Affine, &G2Prepared)>>();
-    check_miller_pairs(&miller_pair_refs)
+    let prepared_proof: PreparedProof =
+        batch_verify_compute_prepared_proof(vk, proofs_and_inputs, r);
+    let pairing_pairs = batch_verify_get_pairing_pairs(&prepared_proof);
+    check_pairing(&pairing_pairs)
 }
