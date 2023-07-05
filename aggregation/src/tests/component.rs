@@ -217,59 +217,71 @@ pub mod scale_pairs {
 
         fn build(self, builder: &mut GateThreadBuilder<Fr>) {
             std::env::set_var("LOOKUP_BITS", self.lookup_bits.to_string());
-
-            let ctx = builder.main(0);
-            // Randomly sample pairs
-            // let pairs = (0..self.len)
-            //     .map(|_| (G1Affine::random(OsRng), G2Affine::random(OsRng)));
-            let pairs = (0..self.len)
-                .map(|_| (G1Affine::generator(), G2Affine::generator()));
-            // Randomly sample scalars
-            let scalars = (0..self.len).map(|_| Fr::random(OsRng));
-
-            // Assign points
             let range = RangeChip::<Fr>::default(self.lookup_bits);
             let fp_chip =
                 FpChip::<_, Fq>::new(&range, self.limb_bits, self.num_limbs);
             let g1_chip = EccChip::new(&fp_chip);
             let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
             let g2_chip = EccChip::new(&fp2_chip);
-            let assigned_pairs: Vec<_> = pairs
-                .clone()
-                .map(|(a, b)| {
+
+            let ctx = builder.main(0);
+
+            // Sample points and scalars
+            let (a, (b, r)): (Vec<_>, (Vec<_>, Vec<_>)) = (0..self.len)
+                .map(|_| {
                     (
-                        g1_chip.load_private::<G1Affine>(ctx, (a.x, a.y)),
-                        g2_chip.load_private::<G2Affine>(ctx, (b.x, b.y)),
+                        G1Affine::random(OsRng),
+                        (G2Affine::random(OsRng), Fr::random(OsRng)),
                     )
                 })
-                .collect();
-            let assigned_scalars: Vec<_> =
-                scalars.clone().map(|r| ctx.load_witness(r)).collect();
+                .unzip();
+
+            // Assign to circuit
+            let (assigned_pairs, assigned_r): (Vec<_>, Vec<_>) = a
+                .iter()
+                .zip(b.iter())
+                .zip(r.iter())
+                .map(|((a, b), r)| {
+                    (
+                        (
+                            g1_chip.assign_point(ctx, a.clone()),
+                            g2_chip.assign_point(ctx, b.clone()),
+                        ),
+                        ctx.load_witness(r.clone()),
+                    )
+                })
+                .unzip();
 
             // Scale pairs
             let scaled_pairs = scale_pairs::<G1Affine, Fr, _>(
                 &fp_chip,
                 ctx,
-                assigned_scalars,
+                assigned_r,
                 assigned_pairs,
             );
 
-            let answer: Vec<_> = scaled_pairs
-                .into_iter()
-                .zip(scalars)
-                .zip(pairs)
-                .map(|((circuit_pair, scalar), (a, b))| {
-                    let answer = ((a * scalar).to_affine(), b);
-                    let g1_answer = g1_chip.assign_point(ctx, answer.0);
-                    println!("Answer: {:?}", answer);
-                    println!("Computed G1: {:?}", (circuit_pair.0.x.value(), circuit_pair.0.y.value()));
-                    // println!("Computed G2: {:?}", (circuit_pair.1.x.value(), circuit_pair.1.y.value()));
-
-                    g1_chip.assert_equal(ctx, g1_answer, circuit_pair.0);
-                    let g2_answer = g2_chip.assign_point(ctx, answer.1);
-                    g2_chip.assert_equal(ctx, g2_answer, circuit_pair.1);
+            // Compute answers, assign to circuit
+            let assigned_answers: Vec<_> = a
+                .iter()
+                .zip(b.iter())
+                .zip(r.iter())
+                .map(|((a, b), r)| {
+                    (
+                        g1_chip.assign_point(ctx, G1Affine::from(a * r)),
+                        g2_chip.assign_point(ctx, b.clone()),
+                    )
                 })
                 .collect();
+
+            // Constrain results
+            let _ = scaled_pairs
+                .iter()
+                .zip(assigned_answers)
+                .map(|((answer_a, answer_b), (computed_a, computed_b))| {
+                    g1_chip.assert_equal(ctx, answer_a.clone(), computed_a);
+                    g2_chip.assert_equal(ctx, answer_b.clone(), computed_b);
+                })
+                .collect::<Vec<_>>();
         }
     }
 
