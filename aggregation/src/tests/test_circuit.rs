@@ -31,7 +31,7 @@ use halo2_ecc::{
     bn254::FpChip, halo2_base::gates::builder::RangeCircuitBuilder,
 };
 use rand_core::OsRng;
-use std::{fs::File, marker::PhantomData};
+use std::{fs::File, iter::once, marker::PhantomData};
 
 fn batch_verify_circuit(
     builder: &mut GateThreadBuilder<Fr>,
@@ -42,7 +42,7 @@ fn batch_verify_circuit(
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let batch_verifier = BatchVerifier {
-        fp_chip,
+        fp_chip: &fp_chip,
         _f: PhantomData,
     };
 
@@ -61,8 +61,11 @@ fn batch_verify_circuit(
         })
         .collect();
 
+    // TODO: correct challenge r
+    let r = builder.main(0).assign_witnesses(once(Fr::from(2)))[0];
+
     // Call `batch_verify`
-    batch_verifier.verify(builder, vk, assigned_proofs_and_inputs);
+    batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs, r);
 }
 
 // cargo test --package aggregation --lib --all-features -- tests::test_circuit::test_aggregation_circuit --exact --nocapture
