@@ -22,7 +22,13 @@ use halo2_base::{
 };
 use rand_core::OsRng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{fs::File, path::Path};
+use std::{
+    fmt::Debug,
+    fs::File,
+    io::{BufRead, BufReader},
+    iter::once,
+    path::Path,
+};
 
 /// Interface for testing a circuit component.
 pub trait TestCircuit<F: ScalarField> {
@@ -36,74 +42,79 @@ pub trait TestCircuit<F: ScalarField> {
 /// Test a circuit from a config located at `path`.
 pub fn test_component<P>(path: impl AsRef<Path>)
 where
-    P: Copy + DeserializeOwned + TestCircuit<Fr>,
+    P: Copy + DeserializeOwned + TestCircuit<Fr> + Debug,
 {
-    let params: P = serde_json::from_reader(
-        File::open(path)
-            .unwrap_or_else(|e| panic!("Path does not exist: {e:?}")),
-    )
-    .unwrap();
-    let rng = OsRng;
-    let k = params.degree();
-    let kzg_params = gen_srs(k);
+    let params_file = File::open(path)
+        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_reader = BufReader::new(params_file);
+    for line in vec![params_reader.lines().next().unwrap()] {
+        println!("line: {line:?}");
+        let params: P = serde_json::from_str(line.unwrap().as_str()).unwrap();
+        println!("params: {params:?}");
+        let rng = OsRng;
+        let k = params.degree();
+        let kzg_params = gen_srs(k);
 
-    // Keygen
-    let mut builder = GateThreadBuilder::<Fr>::keygen();
-    params.build(&mut builder);
-    builder.config(k as usize, Some(20)); // why 20?
-    let circuit = RangeCircuitBuilder::keygen(builder);
+        // Keygen
+        let mut builder = GateThreadBuilder::<Fr>::keygen();
+        params.build(&mut builder);
+        builder.config(k as usize, Some(20)); // why 20?
+        let circuit = RangeCircuitBuilder::keygen(builder);
 
-    let vk_time = start_timer!(|| "Generating vkey");
-    let vk = keygen_vk(&kzg_params, &circuit).unwrap();
-    end_timer!(vk_time);
-    let pk_time = start_timer!(|| "Generating pkey");
-    let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
-    end_timer!(pk_time);
+        let vk_time = start_timer!(|| "Generating vkey");
+        let vk = keygen_vk(&kzg_params, &circuit).unwrap();
+        end_timer!(vk_time);
+        let pk_time = start_timer!(|| "Generating pkey");
+        let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
+        end_timer!(pk_time);
 
-    let break_points = circuit.0.break_points.take();
-    drop(circuit);
+        let break_points = circuit.0.break_points.take();
+        drop(circuit);
 
-    // Create proof
-    let proof_time = start_timer!(|| "Proving time");
-    let mut builder = GateThreadBuilder::<Fr>::prover();
-    params.build(&mut builder);
-    let computed_params = builder.config(k as usize, Some(20));
-    println!("Computed config: {computed_params:?}");
+        // Create proof
+        let proof_time = start_timer!(|| "Proving time");
+        let mut builder = GateThreadBuilder::<Fr>::prover();
+        params.build(&mut builder);
+        let computed_params = builder.config(k as usize, Some(20));
+        println!("Computed config: {computed_params:?}");
 
-    let circuit = RangeCircuitBuilder::prover(builder, break_points);
-    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-    create_proof::<
-        KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        _,
-        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-        _,
-    >(&kzg_params, &pk, &[circuit], &[&[]], rng, &mut transcript)
-    .unwrap();
-    let proof = transcript.finalize();
-    end_timer!(proof_time);
+        let circuit = RangeCircuitBuilder::prover(builder, break_points);
+        let mut transcript =
+            Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+        create_proof::<
+            KZGCommitmentScheme<Bn256>,
+            ProverSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            _,
+            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+            _,
+        >(&kzg_params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+        .unwrap();
+        let proof = transcript.finalize();
+        end_timer!(proof_time);
 
-    // Verify proof
-    let verify_time = start_timer!(|| "Verify time");
-    let verifier_params = kzg_params.verifier_params();
-    let strategy = SingleStrategy::new(&kzg_params);
-    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    verify_proof::<
-        KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-        SingleStrategy<'_, Bn256>,
-    >(
-        verifier_params,
-        pk.get_vk(),
-        strategy,
-        &[&[]],
-        &mut transcript,
-    )
-    .unwrap();
-    end_timer!(verify_time);
+        // Verify proof
+        let verify_time = start_timer!(|| "Verify time");
+        let verifier_params = kzg_params.verifier_params();
+        let strategy = SingleStrategy::new(&kzg_params);
+        let mut transcript =
+            Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+        verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
+            Challenge255<G1Affine>,
+            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+            SingleStrategy<'_, Bn256>,
+        >(
+            verifier_params,
+            pk.get_vk(),
+            strategy,
+            &[&[]],
+            &mut transcript,
+        )
+        .unwrap();
+        end_timer!(verify_time);
+    }
 }
 
 /// Run `MockProver` on a circuit from a config located at `path`.
@@ -112,23 +123,24 @@ pub fn mock_test_component<P>(path: impl AsRef<Path>)
 where
     P: Copy + DeserializeOwned + TestCircuit<Fr>,
 {
-    let params: P = serde_json::from_reader(
-        File::open(path)
-            .unwrap_or_else(|e| panic!("Path does not exist: {e:?}")),
-    )
-    .unwrap();
-    let rng = OsRng;
-    let k = params.degree();
-    let kzg_params = gen_srs(k);
+    let params_file = File::open(path)
+        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_reader = BufReader::new(params_file);
+    for line in params_reader.lines() {
+        let params: P = serde_json::from_str(line.unwrap().as_str()).unwrap();
+        let rng = OsRng;
+        let k = params.degree();
+        let kzg_params = gen_srs(k);
 
-    let mut builder = GateThreadBuilder::<Fr>::mock();
-    params.build(&mut builder);
-    builder.config(k as usize, Some(10));
-    let circuit = RangeCircuitBuilder::mock(builder);
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+        params.build(&mut builder);
+        builder.config(k as usize, Some(10));
+        let circuit = RangeCircuitBuilder::mock(builder);
 
-    MockProver::run(k, &circuit, vec![])
-        .unwrap()
-        .assert_satisfied();
+        MockProver::run(k, &circuit, vec![])
+            .unwrap()
+            .assert_satisfied();
+    }
 }
 
 pub mod scalar_powers {
