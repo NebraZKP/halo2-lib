@@ -5,7 +5,7 @@ use halo2_base::{
         bn256::{Fq, Fq12, Fq2, G1Affine, G2Affine},
         group::ff::{Field, PrimeField},
     },
-    safe_types::{GateInstructions, RangeChip, RangeInstructions},
+    safe_types::GateInstructions,
     utils::ScalarField,
     AssignedValue, Context,
 };
@@ -13,10 +13,7 @@ use halo2_ecc::{
     bigint::ProperCrtUint,
     bn254::{pairing::PairingChip, Fp12Chip, FqPoint},
     ecc::{scalar_multiply, EcPoint, EccChip},
-    fields::{
-        fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip,
-        PrimeFieldChip,
-    },
+    fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
 };
 use std::iter::once;
 
@@ -101,14 +98,7 @@ where
         proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) -> AssignedPreparedProof<F> {
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let ecc_chip = EccChip::new(&fp_chip);
+        let ecc_chip = EccChip::new(self.fp_chip);
 
         let r_powers = scalar_powers(builder.main(0), r, proofs.len());
 
@@ -143,7 +133,7 @@ where
         // Scale (A, B) pairs
         let ab_pairs = scale_pairs::<_>(
             // self.fp_chip,
-            &fp_chip,
+            self.fp_chip,
             builder.main(0),
             r_powers.clone(),
             pairs,
@@ -176,8 +166,9 @@ where
         );
         let minus_rp = ecc_chip.negate(ctx, rp);
         // Load from vk
-        let fp2_chip =
-            Fp2Chip::<F, FpChip<F, Fq>, Fq2 /*&FC, C2::Base*/>::new(&fp_chip);
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2 /*&FC, C2::Base*/>::new(
+            self.fp_chip,
+        );
         let g2_chip = EccChip::new(&fp2_chip);
 
         AssignedPreparedProof {
@@ -224,14 +215,7 @@ where
         // FieldChip trait, say).  So we cannot pass in self.fp_chip, which is
         // a generic FieldChip.
 
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let pairing_chip = PairingChip::<F>::new(&fp_chip);
+        let pairing_chip = PairingChip::<F>::new(self.fp_chip);
         let pair_refs = Self::prepared_proof_to_pair_refs(prepared);
         let miller_out = pairing_chip.multi_miller_loop(ctx, pair_refs);
         pairing_chip.final_exp(ctx, miller_out)
@@ -243,14 +227,7 @@ where
         ctx: &mut Context<F>,
         final_exp_out: &FqPoint<F>,
     ) {
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let fp12_chip = Fp12Chip::<F>::new(&fp_chip);
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
         fp12_chip.assert_equal(ctx, final_exp_out, fp12_one);
     }
