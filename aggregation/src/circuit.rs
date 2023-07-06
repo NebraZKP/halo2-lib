@@ -253,39 +253,6 @@ where
         );
         let pairing_chip = PairingChip::<F>::new(&fp_chip);
         let pair_refs = Self::prepared_proof_to_pair_refs(prepared);
-
-        {
-            let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(&fp_chip);
-            let pair_values: Vec<((Fq, Fq), (Fq2, Fq2))> = pair_refs
-                .iter()
-                .map(|(a, b)| {
-                    (
-                        (
-                            fp_chip.get_assigned_value(&CRTInteger::<F>::from(
-                                a.x.clone(),
-                            )),
-                            fp_chip.get_assigned_value(&CRTInteger::<F>::from(
-                                a.y.clone(),
-                            )),
-                        ),
-                        (
-                            fp2_chip.get_assigned_value(&FieldVector::<
-                                CRTInteger<F>,
-                            >::from(
-                                b.x.clone()
-                            )),
-                            fp2_chip.get_assigned_value(&FieldVector::<
-                                CRTInteger<F>,
-                            >::from(
-                                b.y.clone()
-                            )),
-                        ),
-                    )
-                })
-                .collect();
-            println!("pair values: {pair_values:?}");
-        }
-
         let miller_out = pairing_chip.multi_miller_loop(ctx, pair_refs);
         pairing_chip.final_exp(ctx, miller_out)
     }
