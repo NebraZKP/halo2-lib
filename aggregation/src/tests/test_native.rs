@@ -62,10 +62,10 @@ fn test_pi_accumulation() {
     //
     //   PI = [44]+7*[76]+7^2*[108]+7^3*[140] = [53888]
 
-    let expect = -encode(53888);
+    let expect = -encode_g1(53888);
 
     let vk = VerificationKey {
-        alpha: encode(1),
+        alpha: encode_g1(1),
         beta: encode_g2(1),
         gamma: encode_g2(1),
         delta: encode_g2(1),
@@ -119,10 +119,10 @@ fn test_pi_accumulation() {
         let pi_prep_3 = prepare_public_inputs(&vk, &pi_3);
         let pi_prep_4 = prepare_public_inputs(&vk, &pi_4);
 
-        assert!(pi_prep_1 == encode(2 * 1 + 3 * 4 + 5 * 6));
-        assert!(pi_prep_2 == encode(2 * 1 + 3 * 8 + 5 * 10));
-        assert!(pi_prep_3 == encode(2 * 1 + 3 * 12 + 5 * 14));
-        assert!(pi_prep_4 == encode(2 * 1 + 3 * 16 + 5 * 18));
+        assert!(pi_prep_1 == encode_g1(2 * 1 + 3 * 4 + 5 * 6));
+        assert!(pi_prep_2 == encode_g1(2 * 1 + 3 * 8 + 5 * 10));
+        assert!(pi_prep_3 == encode_g1(2 * 1 + 3 * 12 + 5 * 14));
+        assert!(pi_prep_4 == encode_g1(2 * 1 + 3 * 16 + 5 * 18));
 
         G1Affine::from(
             -(pi_prep_1
@@ -147,25 +147,25 @@ fn test_compute_ZC() {
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
-                a: encode(4),
+                a: encode_g1(4),
                 b: encode_g2(6),
-                c: encode(8),
+                c: encode_g1(8),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(10),
+                a: encode_g1(10),
                 b: encode_g2(12),
-                c: encode(14),
+                c: encode_g1(14),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(16),
+                a: encode_g1(16),
                 b: encode_g2(18),
-                c: encode(20),
+                c: encode_g1(20),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
@@ -174,7 +174,7 @@ fn test_compute_ZC() {
     let r = Fr::from(7);
     let r_powers = batch_verify_compute_r_powers(r, 3);
 
-    let expect = -encode(8 + 7 * 14 + 49 * 20);
+    let expect = -encode_g1(8 + 7 * 14 + 49 * 20);
     assert!(
         expect
             == batch_verify_compute_minus_ZC(
@@ -190,25 +190,25 @@ fn test_compute_r_i_A_i_B_i() {
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
-                a: encode(4),
+                a: encode_g1(4),
                 b: encode_g2(6),
-                c: encode(8),
+                c: encode_g1(8),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(10),
+                a: encode_g1(10),
                 b: encode_g2(12),
-                c: encode(14),
+                c: encode_g1(14),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(16),
+                a: encode_g1(16),
                 b: encode_g2(18),
-                c: encode(20),
+                c: encode_g1(20),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
@@ -218,9 +218,9 @@ fn test_compute_r_i_A_i_B_i() {
     let r_powers = batch_verify_compute_r_powers(r, 3);
 
     let expect = vec![
-        (encode(4), encode_g2(6)),
-        (encode(70), encode_g2(12)),
-        (encode(49 * 16), encode_g2(18)),
+        (encode_g1(4), encode_g2(6)),
+        (encode_g1(70), encode_g2(12)),
+        (encode_g1(49 * 16), encode_g2(18)),
     ];
 
     let r_i_A_i_B_i = batch_verify_compute_r_i_A_i_B_i(

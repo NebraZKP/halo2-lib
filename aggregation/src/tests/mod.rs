@@ -39,7 +39,7 @@ const PROOF1_FILE: &str = "src/tests/proof1.json";
 const PROOF2_FILE: &str = "src/tests/proof2.json";
 const PROOF3_FILE: &str = "src/tests/proof3.json";
 
-pub(crate) fn encode(f: i32) -> G1Affine {
+pub(crate) fn encode_g1(f: i32) -> G1Affine {
     G1Affine::from(G1::generator() * Fr::from(f as u64))
 }
 
@@ -53,7 +53,7 @@ pub(crate) fn encode_fr(f: &Fr) -> G1Affine {
 }
 
 pub(crate) fn encode_vec(fs: &Vec<i32>) -> Vec<G1Affine> {
-    fs.iter().map(|a| encode(*a)).collect()
+    fs.iter().map(|a| encode_g1(*a)).collect()
 }
 
 #[derive(Deserialize, Debug)]

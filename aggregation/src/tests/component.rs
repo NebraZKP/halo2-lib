@@ -349,9 +349,9 @@ mod multi_pairing {
                 ab_pairs: (0..config.num_random_pairs)
                     .map(|_| (G1Affine::random(OsRng), G2Affine::random(OsRng)))
                     .collect(),
-                rp: (encode(3), encode_g2(5)),
-                pi: (encode(7), encode_g2(1)),
-                zc: (encode(11), encode_g2(13)),
+                rp: (encode_g1(3), encode_g2(5)),
+                pi: (encode_g1(7), encode_g2(1)),
+                zc: (encode_g1(11), encode_g2(13)),
             };
 
             do_build_circuit(builder, basic_config, &prepared_proof);
