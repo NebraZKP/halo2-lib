@@ -145,7 +145,6 @@ pub mod scale_pairs {
             })
             .collect::<Vec<_>>();
     }
-    // }
 
     #[test]
     fn test() {
@@ -215,7 +214,7 @@ mod multi_pairing {
     use halo2_base::{
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::halo2curves::{
-            bn256::{Fq, Fq2, G2Affine, Gt},
+            bn256::{Fq, Fq2, G2Affine},
             group::ff::Field,
         },
         Context,
@@ -314,7 +313,8 @@ mod multi_pairing {
 
         println!("actual = {actual:?}");
 
-        assert!(Gt(actual) == expect);
+        // Instead of assert!(Gt(actual) == expect);
+        assert_eq!(format!("Gt({:?})", actual), format!("{expect:?}"));
     }
 
     fn build_circuit(

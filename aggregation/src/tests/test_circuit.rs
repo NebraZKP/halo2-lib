@@ -52,7 +52,7 @@ fn batch_verify_circuit(
 
 #[test]
 fn test_aggregation_circuit() {
-    const PATH: &str = "src/tests/circuit.config";
+    const PATH: &str = "src/tests/configs/circuit.config";
 
     // Read the vk
     let vk = load_vk(VK_FILE);
