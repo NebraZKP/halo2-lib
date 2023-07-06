@@ -395,7 +395,7 @@ mod pairing_check {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
 
         // Test valid and invalid results.
 

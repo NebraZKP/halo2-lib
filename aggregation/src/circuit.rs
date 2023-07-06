@@ -94,7 +94,7 @@ where
     fn prepare_proofs(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) -> AssignedPreparedProof<F> {
@@ -132,14 +132,13 @@ where
             .unzip();
         // Scale (A, B) pairs
         let ab_pairs = scale_pairs::<_>(
-            // self.fp_chip,
             self.fp_chip,
             builder.main(0),
             r_powers.clone(),
             pairs,
         );
         // Combine C points
-        let zc = ecc_chip.variable_base_msm_in::<G1Affine /*C1*/>(
+        let zc = ecc_chip.variable_base_msm_in::<G1Affine>(
             builder,
             &c_points,
             r_powers
@@ -166,9 +165,7 @@ where
         );
         let minus_rp = ecc_chip.negate(ctx, rp);
         // Load from vk
-        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2 /*&FC, C2::Base*/>::new(
-            self.fp_chip,
-        );
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
 
         AssignedPreparedProof {
@@ -238,7 +235,7 @@ where
     pub fn verify(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
@@ -287,7 +284,7 @@ pub fn scalar_powers<F: ScalarField>(
 }
 
 /// Returns `(scalar_i * A_i, B_i)`
-pub fn scale_pairs<'a /*, C1*/, F>(
+pub fn scale_pairs<'a, F>(
     field_chip: &FpChip<'a, F, Fq>,
     ctx: &mut Context<F>,
     scalars: Vec<AssignedValue<F>>,
@@ -300,11 +297,7 @@ pub fn scale_pairs<'a /*, C1*/, F>(
     EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>,
 )>
 where
-    // C1: CurveAffineExt,
     F: PrimeField + ScalarField,
-    // C1::Base = Fq,
-    // FC: FieldChip<F, FieldType = C1::Base>
-    //     + Selectable<F, <FC as FieldChip<F>>::FieldPoint>,
 {
     let mut result = Vec::with_capacity(pairs.len());
     for ((g1, g2), scalar) in pairs.into_iter().zip(scalars.into_iter()) {
