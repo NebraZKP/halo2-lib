@@ -10,7 +10,7 @@ use halo2_base::{
     safe_types::RangeChip,
 };
 use halo2_ecc::bn254::FpChip;
-use std::{iter::once, marker::PhantomData};
+use std::iter::once;
 
 #[derive(Debug, Deserialize)]
 struct TestConfig {}
@@ -23,14 +23,11 @@ fn batch_verify_circuit(
 ) {
     let range = RangeChip::<Fr>::default(config.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, config.limb_bits, config.num_limbs);
-    let batch_verifier = BatchVerifier {
-        fp_chip: &fp_chip,
-        _f: PhantomData,
-    };
+    let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
 
     // Assign proofs / instances as witnesses in `ctx`
     let assigned_proofs_and_inputs: Vec<(
-        AssignedProof<Fr, FpChip<Fr>>,
+        AssignedProof<Fr>,
         AssignedPublicInputs<Fr>,
     )> = proofs_and_inputs
         .iter()

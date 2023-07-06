@@ -4,7 +4,6 @@ use halo2_base::{
     halo2_proofs::halo2curves::{
         bn256::{Fq, Fq12, Fq2, G1Affine, G2Affine},
         group::ff::{Field, PrimeField},
-        CurveAffineExt,
     },
     safe_types::{GateInstructions, RangeChip, RangeInstructions},
     utils::ScalarField,
@@ -16,10 +15,10 @@ use halo2_ecc::{
     ecc::{scalar_multiply, EcPoint, EccChip},
     fields::{
         fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip,
-        FieldExtConstructor, PrimeFieldChip, Selectable,
+        PrimeFieldChip,
     },
 };
-use std::{hash::Hash, iter::once, marker::PhantomData};
+use std::iter::once;
 
 /// TODO: Is it worth allowing this to be variable?
 const WINDOW_BITS: usize = 4;
@@ -28,10 +27,10 @@ const WINDOW_BITS: usize = 4;
 
 /// In-circuit Groth16 proof
 #[derive(Clone, Debug)]
-pub struct AssignedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
-    pub a: EcPoint<F, FC::FieldPoint>,
-    pub b: EcPoint<F, FieldVector<FC::FieldPoint>>,
-    pub c: EcPoint<F, FC::FieldPoint>,
+pub struct AssignedProof<F: PrimeField + ScalarField> {
+    pub a: EcPoint<F, ProperCrtUint<F>>,
+    pub b: EcPoint<F, FieldVector<ProperCrtUint<F>>>,
+    pub c: EcPoint<F, ProperCrtUint<F>>,
 }
 
 /// In-circuit public inputs
@@ -42,54 +41,35 @@ pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
 
 /// In-circuit equivalent of PreparedProof.
 // TODO: handle hard-coded values
-pub(crate) struct AssignedPreparedProof<
-    F: PrimeField + ScalarField,
-    FC: FieldChip<F>,
-> {
+pub(crate) struct AssignedPreparedProof<F: PrimeField + ScalarField> {
     pub ab_pairs: Vec<(
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     )>,
     pub rp: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
     pub pi: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
     pub zc: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
 }
 
-pub struct BatchVerifier<'a, C1, C2, F, FC>
+pub struct BatchVerifier<'a, F>
 where
-    C1: CurveAffineExt,
-    C2: CurveAffineExt,
     F: PrimeField + ScalarField,
-    FC: FieldChip<F, FieldType = C1::Base>,
 {
-    pub fp_chip: &'a FC,
-    pub _f: PhantomData<(C1, C2, F)>,
+    pub fp_chip: &'a FpChip<'a, F, Fq>,
 }
 
-impl<'a, C1, C2, F, FC> BatchVerifier<'a, C1, C2, F, FC>
+impl<'a, F> BatchVerifier<'a, F>
 where
-    C1: CurveAffineExt,
-    C1::Base: Hash,
-    C2: CurveAffineExt,
-    C2::Base: FieldExtConstructor<C1::Base, 2>,
     F: PrimeField + ScalarField,
-    FC: PrimeFieldChip<F, FieldType = C1::Base>
-        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>
-        + Selectable<F, <FC as FieldChip<F>>::ReducedFieldPoint>,
-    // todo: simplify these trait bounds
-    FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
-        From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
-    FieldVector<<FC as FieldChip<F>>::FieldPoint>:
-        From<FieldVector<<FC as FieldChip<F>>::ReducedFieldPoint>>,
 {
     pub fn assign_public_inputs(
         self: &Self,
@@ -102,10 +82,10 @@ where
     pub fn assign_proof(
         self: &Self,
         ctx: &mut Context<F>,
-        proof: &Proof<C1, C2>,
-    ) -> AssignedProof<F, FC> {
+        proof: &Proof,
+    ) -> AssignedProof<F> {
         let g1_chip = EccChip::new(self.fp_chip);
-        let fp2_chip = Fp2Chip::<F, FC, C2::Base>::new(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
         AssignedProof {
             a: g1_chip.assign_point(ctx, proof.a),
@@ -118,9 +98,9 @@ where
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
-        proofs: Vec<(AssignedProof<F, FpChip<F, Fq>>, AssignedPublicInputs<F>)>,
+        proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
-    ) -> AssignedPreparedProof<F, FpChip<F, Fq>> {
+    ) -> AssignedPreparedProof<F> {
         let range_chip =
             RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
         let fp_chip = FpChip::<F, Fq>::new(
@@ -209,7 +189,7 @@ where
     }
 
     fn prepared_proof_to_pair_refs<'prep>(
-        prepared: &'prep AssignedPreparedProof<F, FpChip<F, Fq>>,
+        prepared: &'prep AssignedPreparedProof<F>,
     ) -> Vec<(
         &'prep EcPoint<F, ProperCrtUint<F>>,
         &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
@@ -235,7 +215,7 @@ where
     pub(crate) fn multi_pairing(
         self: &Self,
         ctx: &mut Context<F>,
-        prepared: &AssignedPreparedProof<F, FpChip<F, Fq>>,
+        prepared: &AssignedPreparedProof<F>,
     ) -> FqPoint<F> {
         // TODO: try to make this more generic.  Current problem is that
         // halo2-ecc::bn254::pairing::PairingChip insists on a
@@ -282,10 +262,7 @@ where
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
-        proofs: &Vec<(
-            AssignedProof<F, FpChip<F, Fq>>,
-            AssignedPublicInputs<F>,
-        )>,
+        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
         let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);

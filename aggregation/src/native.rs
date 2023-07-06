@@ -87,14 +87,10 @@ pub struct JsonProof {
 }
 
 #[derive(Clone, Debug)]
-pub struct Proof<C1 = G1Affine, C2 = G2Affine>
-where
-    C1: CurveAffineExt,
-    C2: CurveAffineExt,
-{
-    pub a: C1,
-    pub b: C2,
-    pub c: C1,
+pub struct Proof {
+    pub a: G1Affine,
+    pub b: G2Affine,
+    pub c: G1Affine,
 }
 
 /// "Prepared" here means that all curve points have been accumulated and we
