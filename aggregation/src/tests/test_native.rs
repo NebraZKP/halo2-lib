@@ -1,40 +1,15 @@
-use std::arch::aarch64::vfms_f32;
-
 use super::*;
 use crate::native::{
-    batch_verify, batch_verify_compute_f_j, batch_verify_compute_miller_pairs,
-    batch_verify_compute_minus_ZC, batch_verify_compute_minus_pi,
-    batch_verify_compute_r_i_A_i_B_i, batch_verify_compute_r_powers,
-    load_proof_and_inputs, load_vk, prepare_public_inputs, verify, Proof,
-    PublicInputs, VerificationKey,
+    batch_verify, compute_f_j, compute_minus_ZC, compute_minus_pi,
+    compute_r_i_A_i_B_i, compute_r_powers, load_proof_and_inputs, load_vk,
+    prepare_public_inputs, verify, Proof, PublicInputs, VerificationKey,
 };
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
-    halo2curves::{
-        bn256::{
-            multi_miller_loop, Fr, G1Affine, G2Affine, G2Prepared, Gt, G1, G2,
-        },
-        pairing::MillerLoopResult,
-    },
+    halo2curves::bn256::{Fr, G1Affine},
 };
 
 use rand_core::OsRng;
-
-fn encode(f: i32) -> G1Affine {
-    G1Affine::from(G1::generator() * Fr::from(f as u64))
-}
-
-fn encode_g2(f: i32) -> G2Affine {
-    G2Affine::from(G2::generator() * Fr::from(f as u64))
-}
-
-fn encode_fr(f: &Fr) -> G1Affine {
-    G1Affine::from(G1::generator() * f)
-}
-
-fn encode_vec(fs: &Vec<i32>) -> Vec<G1Affine> {
-    fs.iter().map(|a| encode(*a)).collect()
-}
 
 #[test]
 fn test_load_groth16() {
@@ -86,10 +61,10 @@ fn test_pi_accumulation() {
     //
     //   PI = [44]+7*[76]+7^2*[108]+7^3*[140] = [53888]
 
-    let expect = -encode(53888);
+    let expect = -encode_g1(53888);
 
     let vk = VerificationKey {
-        alpha: encode(1),
+        alpha: encode_g1(1),
         beta: encode_g2(1),
         gamma: encode_g2(1),
         delta: encode_g2(1),
@@ -107,7 +82,7 @@ fn test_pi_accumulation() {
 
     // Check r_powers
 
-    let r_powers = batch_verify_compute_r_powers(r, num_proofs);
+    let r_powers = compute_r_powers(r, num_proofs);
     assert!(Fr::from(1) == r_powers[0]);
     assert!(Fr::from(7) == r_powers[1]);
     assert!(Fr::from(7 * 7) == r_powers[2]);
@@ -122,35 +97,12 @@ fn test_pi_accumulation() {
     // f_0 = 1 + 7 + 49 + 343 = 400
     // f_1 = 4 + 8*7 + 12*49 + 16*343 = 6136
     // f_2 = 6 + 10*7 + 14*49 + 18*343 = 6 + 70 + 686 +6147 = 6936
+    assert!(Fr::from(400) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 0));
     assert!(
-        Fr::from(400)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                0
-            )
+        Fr::from(6136) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 1)
     );
     assert!(
-        Fr::from(6136)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                1
-            )
-    );
-    assert!(
-        Fr::from(6936)
-            == batch_verify_compute_f_j(
-                &s,
-                &inputs,
-                &r_powers,
-                &sum_r_powers,
-                2
-            )
+        Fr::from(6936) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 2)
     );
 
     // Manually compute one proof at a time.
@@ -161,10 +113,10 @@ fn test_pi_accumulation() {
         let pi_prep_3 = prepare_public_inputs(&vk, &pi_3);
         let pi_prep_4 = prepare_public_inputs(&vk, &pi_4);
 
-        assert!(pi_prep_1 == encode(2 * 1 + 3 * 4 + 5 * 6));
-        assert!(pi_prep_2 == encode(2 * 1 + 3 * 8 + 5 * 10));
-        assert!(pi_prep_3 == encode(2 * 1 + 3 * 12 + 5 * 14));
-        assert!(pi_prep_4 == encode(2 * 1 + 3 * 16 + 5 * 18));
+        assert!(pi_prep_1 == encode_g1(2 * 1 + 3 * 4 + 5 * 6));
+        assert!(pi_prep_2 == encode_g1(2 * 1 + 3 * 8 + 5 * 10));
+        assert!(pi_prep_3 == encode_g1(2 * 1 + 3 * 12 + 5 * 14));
+        assert!(pi_prep_4 == encode_g1(2 * 1 + 3 * 16 + 5 * 18));
 
         G1Affine::from(
             -(pi_prep_1
@@ -176,57 +128,49 @@ fn test_pi_accumulation() {
 
     // Run the full computation and check
 
-    let actual =
-        batch_verify_compute_minus_pi(&s, &inputs, &r_powers, sum_r_powers);
+    let actual = compute_minus_pi(&s, &inputs, &r_powers, sum_r_powers);
 
     assert!(expect == actual);
     assert!(expect == computed);
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_ZC() {
-    let vk = VerificationKey {
-        alpha: encode(2),
-        beta: encode_g2(3),
-        gamma: encode_g2(1),
-        delta: encode_g2(5),
-        s: vec![encode(11)],
-    };
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
-                a: encode(4),
+                a: encode_g1(4),
                 b: encode_g2(6),
-                c: encode(8),
+                c: encode_g1(8),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(10),
+                a: encode_g1(10),
                 b: encode_g2(12),
-                c: encode(14),
+                c: encode_g1(14),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(16),
+                a: encode_g1(16),
                 b: encode_g2(18),
-                c: encode(20),
+                c: encode_g1(20),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
     ];
 
     let r = Fr::from(7);
-    let r_powers = batch_verify_compute_r_powers(r, 3);
+    let r_powers = compute_r_powers(r, 3);
 
-    let expect = -encode(8 + 7 * 14 + 49 * 20);
+    let expect = -encode_g1(8 + 7 * 14 + 49 * 20);
     assert!(
         expect
-            == batch_verify_compute_minus_ZC(
-                &vk,
+            == compute_minus_ZC(
                 &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
                 &r_powers
             )
@@ -234,52 +178,45 @@ fn test_compute_ZC() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_r_i_A_i_B_i() {
-    let vk = VerificationKey {
-        alpha: encode(2),
-        beta: encode_g2(3),
-        gamma: encode_g2(1),
-        delta: encode_g2(5),
-        s: vec![encode(11)],
-    };
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> = vec![
         (
             Proof {
-                a: encode(4),
+                a: encode_g1(4),
                 b: encode_g2(6),
-                c: encode(8),
+                c: encode_g1(8),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(10),
+                a: encode_g1(10),
                 b: encode_g2(12),
-                c: encode(14),
+                c: encode_g1(14),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
         (
             Proof {
-                a: encode(16),
+                a: encode_g1(16),
                 b: encode_g2(18),
-                c: encode(20),
+                c: encode_g1(20),
             },
             PublicInputs(vec![Fr::from(0)]),
         ),
     ];
 
     let r = Fr::from(7);
-    let r_powers = batch_verify_compute_r_powers(r, 3);
+    let r_powers = compute_r_powers(r, 3);
 
     let expect = vec![
-        (encode(4), encode_g2(6)),
-        (encode(70), encode_g2(12)),
-        (encode(49 * 16), encode_g2(18)),
+        (encode_g1(4), encode_g2(6)),
+        (encode_g1(70), encode_g2(12)),
+        (encode_g1(49 * 16), encode_g2(18)),
     ];
 
-    let r_i_A_i_B_i = batch_verify_compute_r_i_A_i_B_i(
-        &vk,
+    let r_i_A_i_B_i = compute_r_i_A_i_B_i(
         &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
         &r_powers,
     );
@@ -288,21 +225,14 @@ fn test_compute_r_i_A_i_B_i() {
 }
 
 #[test]
+#[allow(non_snake_case)]
 fn test_compute_pi_2() {
-    // let vk = VerificationKey {
-    //     alpha: encode(2),
-    //     beta: encode_g2(3),
-    //     gamma: encode_g2(1),
-    //     delta: encode_g2(5),
-    //     s: vec![encode(11), encode(13), encode(17), encode(19)],
-    // };
     let vk = load_vk(VK_FILE);
 
     let (proof1, inputs1) = load_proof_and_inputs(PROOF1_FILE);
     let (proof2, inputs2) = load_proof_and_inputs(PROOF2_FILE);
     let (proof3, inputs3) = load_proof_and_inputs(PROOF3_FILE);
 
-    // let r = Fr::from(7); // Fr::random(OsRng);
     let r = Fr::random(OsRng);
 
     // Perform the computation explicitly for 3 proofs
@@ -312,25 +242,21 @@ fn test_compute_pi_2() {
     assert!(verify(&vk, &proof3, &inputs3));
 
     let pi1 = prepare_public_inputs(&vk, &inputs1);
-    let pi2 = prepare_public_inputs(&vk, &inputs2);
+    let _pi2 = prepare_public_inputs(&vk, &inputs2);
     let pi3 = prepare_public_inputs(&vk, &inputs3);
     let num_proofs = 3;
 
-    let PI_computed = G1Affine::from(-(pi1 + (pi3 * r)));
-    let r_powers = batch_verify_compute_r_powers(r, num_proofs);
+    let _PI_computed = G1Affine::from(-(pi1 + (pi3 * r)));
+    let r_powers = compute_r_powers(r, num_proofs);
     let sum_r_powers = r_powers.iter().copied().reduce(|a, b| a + b).unwrap();
 
     // f_is
 
     let inputs = vec![&inputs1, &inputs2, &inputs3];
-    let f_0 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 0);
-    let f_1 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 1);
-    let f_2 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 2);
-    let f_3 =
-        batch_verify_compute_f_j(&vk.s, &inputs, &r_powers, &sum_r_powers, 3);
+    let f_0 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 0);
+    let f_1 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 1);
+    let f_2 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 2);
+    let f_3 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 3);
     assert!(f_0 == sum_r_powers);
     assert!(f_1 == (inputs1.0[0] + inputs2.0[0] * r + inputs3.0[0] * r * r));
     assert!(f_2 == (inputs1.0[1] + inputs2.0[1] * r + inputs3.0[1] * r * r));
@@ -344,7 +270,7 @@ fn test_compute_pi_2() {
 
     // Actual computation
 
-    let PI_actual = batch_verify_compute_minus_pi(
+    let PI_actual = compute_minus_pi(
         &vk.s,
         &vec![&inputs1, &inputs2, &inputs3],
         &r_powers,
@@ -359,7 +285,7 @@ fn test_groth16_batch_verify() {
     let vk = load_vk(VK_FILE);
 
     let (proof1, inputs1) = load_proof_and_inputs(PROOF1_FILE);
-    let (proof2, inputs2) = load_proof_and_inputs(PROOF2_FILE);
+    let (proof2, _inputs2) = load_proof_and_inputs(PROOF2_FILE);
     let (proof3, inputs3) = load_proof_and_inputs(PROOF3_FILE);
     let r = Fr::random(OsRng);
 

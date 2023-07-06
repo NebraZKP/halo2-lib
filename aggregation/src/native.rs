@@ -54,7 +54,7 @@ pub struct JsonVerificationKey {
     pub s: Vec<[String; 2]>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VerificationKey<C1 = G1Affine, C2 = G2Affine>
 where
     C1: CurveAffineExt,
@@ -79,14 +79,14 @@ impl From<&JsonVerificationKey> for VerificationKey {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonProof {
     pub a: [String; 2],
     pub b: [[String; 2]; 2],
     pub c: [String; 2],
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Proof<C1 = G1Affine, C2 = G2Affine>
 where
     C1: CurveAffineExt,
@@ -100,7 +100,7 @@ where
 /// "Prepared" here means that all curve points have been accumulated and we
 /// have a sequence of pairs of G1 and G2 points ready for passing to a
 /// multi-Miller loop.
-struct PreparedProof {
+pub(crate) struct PreparedProof {
     /// Rescaled pairs (r^i * A_i, B_i)
     pub ab_pairs: Vec<(G1Affine, G2Affine)>,
     /// (-sum_i r^i * P, Q)
@@ -149,7 +149,7 @@ pub fn load_vk(filename: &str) -> VerificationKey {
 }
 
 pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Deserialize)]
     struct JsonProofAndInputs {
         proof: JsonProof,
         inputs: JsonPublicInputs,
@@ -162,7 +162,7 @@ pub fn load_proof_and_inputs(filename: &str) -> (Proof, PublicInputs) {
     )
 }
 
-pub fn prepare_public_inputs(
+pub(crate) fn prepare_public_inputs(
     vk: &VerificationKey,
     inputs: &PublicInputs,
 ) -> G1Affine {
@@ -173,13 +173,21 @@ pub fn prepare_public_inputs(
     G1Affine::from(pi)
 }
 
-pub(crate) fn check_miller_pairs(
-    pairs: &Vec<(&G1Affine, &G2Prepared)>,
-) -> bool {
+pub(crate) fn pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> Gt {
+    // Store the prepared G2 elements, so we can create references to them.
+    let prepared_g2: Vec<G2Prepared> =
+        pairs.iter().map(|(_, b)| G2Prepared::from(**b)).collect();
+    let pairs: Vec<(&G1Affine, &G2Prepared)> = pairs
+        .iter()
+        .zip(prepared_g2.iter())
+        .map(|((a, _), b)| (*a, b))
+        .collect();
     let miller_out = multi_miller_loop(pairs.as_slice());
-    let pairing_out = miller_out.final_exponentiation();
-    println!("PAIRING OUT: {pairing_out:?}");
-    // Pairing check
+    miller_out.final_exponentiation()
+}
+
+pub(crate) fn check_pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> bool {
+    let pairing_out = pairing(pairs);
     pairing_out == Gt::identity()
 }
 
@@ -204,23 +212,20 @@ pub fn verify(
     //     (&-proof.c, &G2Prepared::from_affine(vk.delta)),
     // ])
 
-    check_miller_pairs(&vec![
-        (&proof.a, &G2Prepared::from_affine(proof.b)),
-        (&-vk.alpha, &G2Prepared::from_affine(vk.beta)),
-        (&-pi, &G2Prepared::from_affine(G2Affine::generator())),
-        (&-proof.c, &G2Prepared::from_affine(vk.delta)),
+    check_pairing(&vec![
+        (&proof.a, &proof.b),
+        (&-vk.alpha, &vk.beta),
+        (&-pi, &G2Affine::generator()),
+        (&-proof.c, &vk.delta),
     ])
 }
 
-pub(crate) fn batch_verify_compute_r_powers(
-    r: Fr,
-    num_powers: usize,
-) -> Vec<Fr> {
+pub(crate) fn compute_r_powers(r: Fr, num_powers: usize) -> Vec<Fr> {
     assert!(num_powers >= 2);
     let mut powers = Vec::<Fr>::with_capacity(num_powers);
     powers.push(Fr::from(1));
     powers.push(r);
-    for i in 2..num_powers {
+    for _ in 2..num_powers {
         powers.push(powers.last().unwrap() * r);
     }
 
@@ -228,8 +233,7 @@ pub(crate) fn batch_verify_compute_r_powers(
     powers
 }
 
-pub(crate) fn batch_verify_compute_f_j(
-    s: &Vec<G1Affine>,
+pub(crate) fn compute_f_j(
     inputs: &Vec<&PublicInputs>,
     r_powers: &Vec<Fr>,
     sum_r_powers: &Fr,
@@ -248,13 +252,12 @@ pub(crate) fn batch_verify_compute_f_j(
     res
 }
 
-pub(crate) fn batch_verify_compute_minus_pi(
+pub(crate) fn compute_minus_pi(
     s: &Vec<G1Affine>,
     inputs: &Vec<&PublicInputs>,
     r_powers: &Vec<Fr>,
     sum_r_powers: Fr,
 ) -> G1Affine {
-    let num_proofs = inputs.len();
     let num_inputs = inputs[0].0.len();
     assert!(s.len() == num_inputs + 1);
 
@@ -269,11 +272,9 @@ pub(crate) fn batch_verify_compute_minus_pi(
     //   f_0 = \sum_{0}^{n-1} r^i = sum_r_powers
     //   f_j = \sum_{0}^{n-1} r^i = PI_{i,j-1}
 
-    let mut pi =
-        s[0] * batch_verify_compute_f_j(s, inputs, r_powers, &sum_r_powers, 0);
+    let mut pi = s[0] * compute_f_j(inputs, r_powers, &sum_r_powers, 0);
     for j in 1..num_inputs + 1 {
-        let pi_i = s[j]
-            * batch_verify_compute_f_j(s, inputs, r_powers, &sum_r_powers, j);
+        let pi_i = s[j] * compute_f_j(inputs, r_powers, &sum_r_powers, j);
 
         pi = pi + pi_i;
     }
@@ -281,8 +282,8 @@ pub(crate) fn batch_verify_compute_minus_pi(
     G1Affine::from(-pi)
 }
 
-pub(crate) fn batch_verify_compute_minus_ZC(
-    vk: &VerificationKey,
+#[allow(non_snake_case)]
+pub(crate) fn compute_minus_ZC(
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> G1Affine {
@@ -295,8 +296,8 @@ pub(crate) fn batch_verify_compute_minus_ZC(
     G1Affine::from(-z_C)
 }
 
-pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
-    vk: &VerificationKey,
+#[allow(non_snake_case)]
+pub(crate) fn compute_r_i_A_i_B_i(
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> Vec<(G1Affine, G2Affine)> {
@@ -309,15 +310,15 @@ pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
     A_i_r_is.zip(B_is).collect()
 }
 
-pub(crate) fn batch_verify_compute_miller_pairs(
+#[allow(non_snake_case)]
+pub(crate) fn compute_prepared_proof(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r: Fr,
-) -> Vec<(G1Affine, G2Prepared)> {
+) -> PreparedProof {
     let num_proofs = proofs_and_inputs.len();
     assert!(num_proofs > 0);
-    let num_inputs = proofs_and_inputs[0].1 .0.len();
-    let r_powers: Vec<Fr> = batch_verify_compute_r_powers(r, num_proofs);
+    let r_powers: Vec<Fr> = compute_r_powers(r, num_proofs);
     assert!(r_powers[0] == Fr::from(1));
     assert!(r_powers[num_proofs - 1] == r_powers[1] * r_powers[num_proofs - 2]);
 
@@ -328,7 +329,7 @@ pub(crate) fn batch_verify_compute_miller_pairs(
 
     // Accumulated public inputs
 
-    let minus_pi = batch_verify_compute_minus_pi(
+    let minus_pi = compute_minus_pi(
         &vk.s,
         &proofs_and_inputs.iter().map(|p_i| p_i.1).collect(),
         &r_powers,
@@ -337,8 +338,7 @@ pub(crate) fn batch_verify_compute_miller_pairs(
 
     // Compute z_C
 
-    let minus_z_C: G1Affine =
-        batch_verify_compute_minus_ZC(vk, proofs_and_inputs, &r_powers);
+    let minus_z_C: G1Affine = compute_minus_ZC(proofs_and_inputs, &r_powers);
 
     // Compute ( \sum_i r^i ) * P
 
@@ -346,34 +346,40 @@ pub(crate) fn batch_verify_compute_miller_pairs(
 
     // Construct (A_i * r^i, B_i)
 
-    let r_i_A_i_B_i =
-        batch_verify_compute_r_i_A_i_B_i(vk, proofs_and_inputs, &r_powers);
+    let r_i_A_i_B_i = compute_r_i_A_i_B_i(proofs_and_inputs, &r_powers);
 
-    // Miller pairs
-
-    let miller_pairs = r_i_A_i_B_i
-        .iter()
-        .copied()
-        .chain(once((minus_r_P, vk.beta)))
-        .chain(once((minus_pi, G2Affine::generator())))
-        .chain(once((minus_z_C, vk.delta)));
-    let miller_pairs = miller_pairs.map(|(a, b)| (a, G2Prepared::from(b)));
-
-    let miller_pairs: Vec<(G1Affine, G2Prepared)> = miller_pairs.collect();
-
-    miller_pairs
+    PreparedProof {
+        ab_pairs: r_i_A_i_B_i,
+        rp: (minus_r_P, vk.beta),
+        pi: (minus_pi, G2Affine::generator()),
+        zc: (minus_z_C, vk.delta),
+    }
 }
+
+pub(crate) fn get_pairing_pairs<'a>(
+    prep_proof: &'a PreparedProof,
+) -> Vec<(&'a G1Affine, &'a G2Affine)> {
+    let miller_pairs = prep_proof
+        .ab_pairs
+        .iter()
+        .chain(once(&prep_proof.rp))
+        .chain(once(&prep_proof.pi))
+        .chain(once(&prep_proof.zc))
+        .map(|(a, b)| (a, b));
+    miller_pairs.collect()
+}
+
+// TODO: it's useful to break up the construction of the pairs, and the
+// preparation, for testing the circuit.  However, we should be able to use
+// iterators and only allocate at the end.
 
 pub fn batch_verify(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r: Fr,
 ) -> bool {
-    let miller_pairs =
-        batch_verify_compute_miller_pairs(vk, proofs_and_inputs, r);
-    let miller_pair_refs: Vec<(&G1Affine, &G2Prepared)> = miller_pairs
-        .iter()
-        .map(|(a, b)| (a, b))
-        .collect::<Vec<(&G1Affine, &G2Prepared)>>();
-    check_miller_pairs(&miller_pair_refs)
+    let prepared_proof: PreparedProof =
+        compute_prepared_proof(vk, proofs_and_inputs, r);
+    let pairing_pairs = get_pairing_pairs(&prepared_proof);
+    check_pairing(&pairing_pairs)
 }
