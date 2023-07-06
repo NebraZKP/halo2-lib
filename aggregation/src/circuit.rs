@@ -214,6 +214,9 @@ where
         &'prep EcPoint<F, ProperCrtUint<F>>,
         &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     )> {
+        // TODO: consider moving this to an
+        //   impl From<AssignedPreparedProof> for Vec<(&EcPoint, &EcPoint)>
+
         let pairs: Vec<(
             &'prep EcPoint<F, ProperCrtUint<F>>,
             &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
