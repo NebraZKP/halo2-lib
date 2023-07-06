@@ -11,7 +11,7 @@ use halo2_base::{
     AssignedValue, Context,
 };
 use halo2_ecc::{
-    bigint::{CRTInteger, ProperCrtUint},
+    bigint::ProperCrtUint,
     bn254::{pairing::PairingChip, Fp12Chip, FqPoint},
     ecc::{scalar_multiply, EcPoint, EccChip},
     fields::{
