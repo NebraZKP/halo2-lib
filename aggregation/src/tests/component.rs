@@ -206,9 +206,8 @@ mod multi_pairing {
     use crate::{
         circuit::{AssignedPreparedProof, BatchVerifier},
         native::{
-            batch_verify_compute_prepared_proof,
-            batch_verify_get_pairing_pairs, load_proof_and_inputs, load_vk,
-            pairing, PreparedProof,
+            compute_prepared_proof, get_pairing_pairs, load_proof_and_inputs,
+            load_vk, pairing, PreparedProof,
         },
     };
     use halo2_base::{
@@ -258,7 +257,7 @@ mod multi_pairing {
         // Natively compute the expected pairing result
 
         let expect = {
-            let pairs_values = batch_verify_get_pairing_pairs(&prepared_proof);
+            let pairs_values = get_pairing_pairs(&prepared_proof);
             println!("pairs_values = {pairs_values:?}");
             let pairing_out = pairing(&pairs_values);
             println!("expect pairing_out = {pairing_out:?}");
@@ -333,7 +332,7 @@ mod multi_pairing {
 
             // Compute everything natively
 
-            let prepared_proof = batch_verify_compute_prepared_proof(
+            let prepared_proof = compute_prepared_proof(
                 &vk,
                 &vec![
                     (&proof1, &inputs1),

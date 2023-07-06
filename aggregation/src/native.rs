@@ -220,10 +220,7 @@ pub fn verify(
     ])
 }
 
-pub(crate) fn batch_verify_compute_r_powers(
-    r: Fr,
-    num_powers: usize,
-) -> Vec<Fr> {
+pub(crate) fn compute_r_powers(r: Fr, num_powers: usize) -> Vec<Fr> {
     assert!(num_powers >= 2);
     let mut powers = Vec::<Fr>::with_capacity(num_powers);
     powers.push(Fr::from(1));
@@ -236,7 +233,7 @@ pub(crate) fn batch_verify_compute_r_powers(
     powers
 }
 
-pub(crate) fn batch_verify_compute_f_j(
+pub(crate) fn compute_f_j(
     inputs: &Vec<&PublicInputs>,
     r_powers: &Vec<Fr>,
     sum_r_powers: &Fr,
@@ -255,7 +252,7 @@ pub(crate) fn batch_verify_compute_f_j(
     res
 }
 
-pub(crate) fn batch_verify_compute_minus_pi(
+pub(crate) fn compute_minus_pi(
     s: &Vec<G1Affine>,
     inputs: &Vec<&PublicInputs>,
     r_powers: &Vec<Fr>,
@@ -275,11 +272,9 @@ pub(crate) fn batch_verify_compute_minus_pi(
     //   f_0 = \sum_{0}^{n-1} r^i = sum_r_powers
     //   f_j = \sum_{0}^{n-1} r^i = PI_{i,j-1}
 
-    let mut pi =
-        s[0] * batch_verify_compute_f_j(inputs, r_powers, &sum_r_powers, 0);
+    let mut pi = s[0] * compute_f_j(inputs, r_powers, &sum_r_powers, 0);
     for j in 1..num_inputs + 1 {
-        let pi_i =
-            s[j] * batch_verify_compute_f_j(inputs, r_powers, &sum_r_powers, j);
+        let pi_i = s[j] * compute_f_j(inputs, r_powers, &sum_r_powers, j);
 
         pi = pi + pi_i;
     }
@@ -288,7 +283,7 @@ pub(crate) fn batch_verify_compute_minus_pi(
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn batch_verify_compute_minus_ZC(
+pub(crate) fn compute_minus_ZC(
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> G1Affine {
@@ -302,7 +297,7 @@ pub(crate) fn batch_verify_compute_minus_ZC(
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
+pub(crate) fn compute_r_i_A_i_B_i(
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r_powers: &Vec<Fr>,
 ) -> Vec<(G1Affine, G2Affine)> {
@@ -316,14 +311,14 @@ pub(crate) fn batch_verify_compute_r_i_A_i_B_i(
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn batch_verify_compute_prepared_proof(
+pub(crate) fn compute_prepared_proof(
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
     r: Fr,
 ) -> PreparedProof {
     let num_proofs = proofs_and_inputs.len();
     assert!(num_proofs > 0);
-    let r_powers: Vec<Fr> = batch_verify_compute_r_powers(r, num_proofs);
+    let r_powers: Vec<Fr> = compute_r_powers(r, num_proofs);
     assert!(r_powers[0] == Fr::from(1));
     assert!(r_powers[num_proofs - 1] == r_powers[1] * r_powers[num_proofs - 2]);
 
@@ -334,7 +329,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
 
     // Accumulated public inputs
 
-    let minus_pi = batch_verify_compute_minus_pi(
+    let minus_pi = compute_minus_pi(
         &vk.s,
         &proofs_and_inputs.iter().map(|p_i| p_i.1).collect(),
         &r_powers,
@@ -343,8 +338,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
 
     // Compute z_C
 
-    let minus_z_C: G1Affine =
-        batch_verify_compute_minus_ZC(proofs_and_inputs, &r_powers);
+    let minus_z_C: G1Affine = compute_minus_ZC(proofs_and_inputs, &r_powers);
 
     // Compute ( \sum_i r^i ) * P
 
@@ -352,8 +346,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
 
     // Construct (A_i * r^i, B_i)
 
-    let r_i_A_i_B_i =
-        batch_verify_compute_r_i_A_i_B_i(proofs_and_inputs, &r_powers);
+    let r_i_A_i_B_i = compute_r_i_A_i_B_i(proofs_and_inputs, &r_powers);
 
     PreparedProof {
         ab_pairs: r_i_A_i_B_i,
@@ -363,7 +356,7 @@ pub(crate) fn batch_verify_compute_prepared_proof(
     }
 }
 
-pub(crate) fn batch_verify_get_pairing_pairs<'a>(
+pub(crate) fn get_pairing_pairs<'a>(
     prep_proof: &'a PreparedProof,
 ) -> Vec<(&'a G1Affine, &'a G2Affine)> {
     let miller_pairs = prep_proof
@@ -386,7 +379,7 @@ pub fn batch_verify(
     r: Fr,
 ) -> bool {
     let prepared_proof: PreparedProof =
-        batch_verify_compute_prepared_proof(vk, proofs_and_inputs, r);
-    let pairing_pairs = batch_verify_get_pairing_pairs(&prepared_proof);
+        compute_prepared_proof(vk, proofs_and_inputs, r);
+    let pairing_pairs = get_pairing_pairs(&prepared_proof);
     check_pairing(&pairing_pairs)
 }

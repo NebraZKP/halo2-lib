@@ -1,8 +1,7 @@
 use super::*;
 use crate::native::{
-    batch_verify, batch_verify_compute_f_j, batch_verify_compute_minus_ZC,
-    batch_verify_compute_minus_pi, batch_verify_compute_r_i_A_i_B_i,
-    batch_verify_compute_r_powers, load_proof_and_inputs, load_vk,
+    batch_verify, compute_f_j, compute_minus_ZC, compute_minus_pi,
+    compute_r_i_A_i_B_i, compute_r_powers, load_proof_and_inputs, load_vk,
     prepare_public_inputs, verify, Proof, PublicInputs, VerificationKey,
 };
 use halo2_base::halo2_proofs::{
@@ -83,7 +82,7 @@ fn test_pi_accumulation() {
 
     // Check r_powers
 
-    let r_powers = batch_verify_compute_r_powers(r, num_proofs);
+    let r_powers = compute_r_powers(r, num_proofs);
     assert!(Fr::from(1) == r_powers[0]);
     assert!(Fr::from(7) == r_powers[1]);
     assert!(Fr::from(7 * 7) == r_powers[2]);
@@ -98,17 +97,12 @@ fn test_pi_accumulation() {
     // f_0 = 1 + 7 + 49 + 343 = 400
     // f_1 = 4 + 8*7 + 12*49 + 16*343 = 6136
     // f_2 = 6 + 10*7 + 14*49 + 18*343 = 6 + 70 + 686 +6147 = 6936
+    assert!(Fr::from(400) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 0));
     assert!(
-        Fr::from(400)
-            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 0)
+        Fr::from(6136) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 1)
     );
     assert!(
-        Fr::from(6136)
-            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 1)
-    );
-    assert!(
-        Fr::from(6936)
-            == batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 2)
+        Fr::from(6936) == compute_f_j(&inputs, &r_powers, &sum_r_powers, 2)
     );
 
     // Manually compute one proof at a time.
@@ -134,8 +128,7 @@ fn test_pi_accumulation() {
 
     // Run the full computation and check
 
-    let actual =
-        batch_verify_compute_minus_pi(&s, &inputs, &r_powers, sum_r_powers);
+    let actual = compute_minus_pi(&s, &inputs, &r_powers, sum_r_powers);
 
     assert!(expect == actual);
     assert!(expect == computed);
@@ -172,12 +165,12 @@ fn test_compute_ZC() {
     ];
 
     let r = Fr::from(7);
-    let r_powers = batch_verify_compute_r_powers(r, 3);
+    let r_powers = compute_r_powers(r, 3);
 
     let expect = -encode_g1(8 + 7 * 14 + 49 * 20);
     assert!(
         expect
-            == batch_verify_compute_minus_ZC(
+            == compute_minus_ZC(
                 &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
                 &r_powers
             )
@@ -215,7 +208,7 @@ fn test_compute_r_i_A_i_B_i() {
     ];
 
     let r = Fr::from(7);
-    let r_powers = batch_verify_compute_r_powers(r, 3);
+    let r_powers = compute_r_powers(r, 3);
 
     let expect = vec![
         (encode_g1(4), encode_g2(6)),
@@ -223,7 +216,7 @@ fn test_compute_r_i_A_i_B_i() {
         (encode_g1(49 * 16), encode_g2(18)),
     ];
 
-    let r_i_A_i_B_i = batch_verify_compute_r_i_A_i_B_i(
+    let r_i_A_i_B_i = compute_r_i_A_i_B_i(
         &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
         &r_powers,
     );
@@ -254,16 +247,16 @@ fn test_compute_pi_2() {
     let num_proofs = 3;
 
     let _PI_computed = G1Affine::from(-(pi1 + (pi3 * r)));
-    let r_powers = batch_verify_compute_r_powers(r, num_proofs);
+    let r_powers = compute_r_powers(r, num_proofs);
     let sum_r_powers = r_powers.iter().copied().reduce(|a, b| a + b).unwrap();
 
     // f_is
 
     let inputs = vec![&inputs1, &inputs2, &inputs3];
-    let f_0 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 0);
-    let f_1 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 1);
-    let f_2 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 2);
-    let f_3 = batch_verify_compute_f_j(&inputs, &r_powers, &sum_r_powers, 3);
+    let f_0 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 0);
+    let f_1 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 1);
+    let f_2 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 2);
+    let f_3 = compute_f_j(&inputs, &r_powers, &sum_r_powers, 3);
     assert!(f_0 == sum_r_powers);
     assert!(f_1 == (inputs1.0[0] + inputs2.0[0] * r + inputs3.0[0] * r * r));
     assert!(f_2 == (inputs1.0[1] + inputs2.0[1] * r + inputs3.0[1] * r * r));
@@ -277,7 +270,7 @@ fn test_compute_pi_2() {
 
     // Actual computation
 
-    let PI_actual = batch_verify_compute_minus_pi(
+    let PI_actual = compute_minus_pi(
         &vk.s,
         &vec![&inputs1, &inputs2, &inputs3],
         &r_powers,
