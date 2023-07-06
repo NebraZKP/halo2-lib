@@ -73,6 +73,12 @@ fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
     (basic_config, test_config)
 }
 
+/// Test key, witness generation and proof generation of a circuit, based on
+/// the configurations in `path`.  The file `path` must contain one or more
+/// lines of JSON specifying a `BasicConfig`, with any extra attributes
+/// required by the test-specific object type `C`.  The function
+/// `build_circuit` is used to contruct a circuit using the `BasicConfig` and
+/// `C` objects read from `path`.
 fn run_circuit_test<
     C: DeserializeOwned + Debug,
     BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C),
@@ -159,7 +165,8 @@ fn run_circuit_test<
     }
 }
 
-/// Run `MockProver` on a circuit from a config located at `path`.
+/// Run `MockProver` on a circuit from a config located at `path`.  Operation
+/// is exactly the same as run_circuit_test, except that `MockProver` is used.
 /// This often gives more informative error messages.
 pub fn run_circuit_mock_test<
     C: DeserializeOwned + Debug,
