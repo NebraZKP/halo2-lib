@@ -105,11 +105,8 @@ where
         // Process public inputs
         let (proofs, public_inputs): (Vec<_>, Vec<_>) =
             proofs.into_iter().unzip();
-        let processed_public_inputs = process_public_inputs(
-            builder.main(0),
-            r_powers.clone(),
-            public_inputs,
-        );
+        let processed_public_inputs =
+            process_public_inputs(builder.main(0), &r_powers, public_inputs);
         // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
         let processed_public_inputs: Vec<_> = processed_public_inputs
             .0
@@ -249,7 +246,7 @@ where
 /// Return accumulated public inputs
 pub fn process_public_inputs<F: ScalarField>(
     ctx: &mut Context<F>,
-    powers: Vec<AssignedValue<F>>,
+    powers: &Vec<AssignedValue<F>>,
     public_inputs: Vec<AssignedPublicInputs<F>>,
 ) -> AssignedPublicInputs<F> {
     let gate = GateChip::default();
