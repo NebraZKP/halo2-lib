@@ -4,9 +4,8 @@ use halo2_base::{
     halo2_proofs::halo2curves::{
         bn256::{Fq, Fq12, Fq2, G1Affine, G2Affine},
         group::ff::{Field, PrimeField},
-        CurveAffineExt,
     },
-    safe_types::{GateInstructions, RangeChip, RangeInstructions},
+    safe_types::GateInstructions,
     utils::ScalarField,
     AssignedValue, Context,
 };
@@ -14,12 +13,9 @@ use halo2_ecc::{
     bigint::ProperCrtUint,
     bn254::{pairing::PairingChip, Fp12Chip, FqPoint},
     ecc::{scalar_multiply, EcPoint, EccChip},
-    fields::{
-        fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip,
-        FieldExtConstructor, PrimeFieldChip, Selectable,
-    },
+    fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
 };
-use std::{hash::Hash, iter::once, marker::PhantomData};
+use std::iter::once;
 
 /// TODO: Is it worth allowing this to be variable?
 const WINDOW_BITS: usize = 4;
@@ -28,10 +24,10 @@ const WINDOW_BITS: usize = 4;
 
 /// In-circuit Groth16 proof
 #[derive(Clone, Debug)]
-pub struct AssignedProof<F: PrimeField + ScalarField, FC: FieldChip<F>> {
-    pub a: EcPoint<F, FC::FieldPoint>,
-    pub b: EcPoint<F, FieldVector<FC::FieldPoint>>,
-    pub c: EcPoint<F, FC::FieldPoint>,
+pub struct AssignedProof<F: PrimeField + ScalarField> {
+    pub a: EcPoint<F, ProperCrtUint<F>>,
+    pub b: EcPoint<F, FieldVector<ProperCrtUint<F>>>,
+    pub c: EcPoint<F, ProperCrtUint<F>>,
 }
 
 /// In-circuit public inputs
@@ -42,54 +38,35 @@ pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
 
 /// In-circuit equivalent of PreparedProof.
 // TODO: handle hard-coded values
-pub(crate) struct AssignedPreparedProof<
-    F: PrimeField + ScalarField,
-    FC: FieldChip<F>,
-> {
+pub(crate) struct AssignedPreparedProof<F: PrimeField + ScalarField> {
     pub ab_pairs: Vec<(
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     )>,
     pub rp: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
     pub pi: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
     pub zc: (
-        EcPoint<F, FC::FieldPoint>,
-        EcPoint<F, FieldVector<FC::FieldPoint>>,
+        EcPoint<F, ProperCrtUint<F>>,
+        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
     ),
 }
 
-pub struct BatchVerifier<'a, C1, C2, F, FC>
+pub struct BatchVerifier<'a, F>
 where
-    C1: CurveAffineExt,
-    C2: CurveAffineExt,
     F: PrimeField + ScalarField,
-    FC: FieldChip<F, FieldType = C1::Base>,
 {
-    pub fp_chip: &'a FC,
-    pub _f: PhantomData<(C1, C2, F)>,
+    pub fp_chip: &'a FpChip<'a, F, Fq>,
 }
 
-impl<'a, C1, C2, F, FC> BatchVerifier<'a, C1, C2, F, FC>
+impl<'a, F> BatchVerifier<'a, F>
 where
-    C1: CurveAffineExt,
-    C1::Base: Hash,
-    C2: CurveAffineExt,
-    C2::Base: FieldExtConstructor<C1::Base, 2>,
     F: PrimeField + ScalarField,
-    FC: PrimeFieldChip<F, FieldType = C1::Base>
-        + Selectable<F, <FC as FieldChip<F>>::FieldPoint>
-        + Selectable<F, <FC as FieldChip<F>>::ReducedFieldPoint>,
-    // todo: simplify these trait bounds
-    FieldVector<<FC as FieldChip<F>>::UnsafeFieldPoint>:
-        From<FieldVector<<FC as FieldChip<F>>::FieldPoint>>,
-    FieldVector<<FC as FieldChip<F>>::FieldPoint>:
-        From<FieldVector<<FC as FieldChip<F>>::ReducedFieldPoint>>,
 {
     pub fn assign_public_inputs(
         self: &Self,
@@ -102,10 +79,10 @@ where
     pub fn assign_proof(
         self: &Self,
         ctx: &mut Context<F>,
-        proof: &Proof<C1, C2>,
-    ) -> AssignedProof<F, FC> {
+        proof: &Proof,
+    ) -> AssignedProof<F> {
         let g1_chip = EccChip::new(self.fp_chip);
-        let fp2_chip = Fp2Chip::<F, FC, C2::Base>::new(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
         AssignedProof {
             a: g1_chip.assign_point(ctx, proof.a),
@@ -117,29 +94,19 @@ where
     fn prepare_proofs(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
-        proofs: Vec<(AssignedProof<F, FpChip<F, Fq>>, AssignedPublicInputs<F>)>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
+        proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
-    ) -> AssignedPreparedProof<F, FpChip<F, Fq>> {
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let ecc_chip = EccChip::new(&fp_chip);
+    ) -> AssignedPreparedProof<F> {
+        let ecc_chip = EccChip::new(self.fp_chip);
 
         let r_powers = scalar_powers(builder.main(0), r, proofs.len());
 
         // Process public inputs
         let (proofs, public_inputs): (Vec<_>, Vec<_>) =
             proofs.into_iter().unzip();
-        let processed_public_inputs = process_public_inputs(
-            builder.main(0),
-            r_powers.clone(),
-            public_inputs,
-        );
+        let processed_public_inputs =
+            process_public_inputs(builder.main(0), &r_powers, public_inputs);
         // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
         let processed_public_inputs: Vec<_> = processed_public_inputs
             .0
@@ -162,14 +129,13 @@ where
             .unzip();
         // Scale (A, B) pairs
         let ab_pairs = scale_pairs::<_>(
-            // self.fp_chip,
-            &fp_chip,
+            self.fp_chip,
             builder.main(0),
             r_powers.clone(),
             pairs,
         );
         // Combine C points
-        let zc = ecc_chip.variable_base_msm_in::<G1Affine /*C1*/>(
+        let zc = ecc_chip.variable_base_msm_in::<G1Affine>(
             builder,
             &c_points,
             r_powers
@@ -196,8 +162,7 @@ where
         );
         let minus_rp = ecc_chip.negate(ctx, rp);
         // Load from vk
-        let fp2_chip =
-            Fp2Chip::<F, FpChip<F, Fq>, Fq2 /*&FC, C2::Base*/>::new(&fp_chip);
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
 
         AssignedPreparedProof {
@@ -209,7 +174,7 @@ where
     }
 
     fn prepared_proof_to_pair_refs<'prep>(
-        prepared: &'prep AssignedPreparedProof<F, FpChip<F, Fq>>,
+        prepared: &'prep AssignedPreparedProof<F>,
     ) -> Vec<(
         &'prep EcPoint<F, ProperCrtUint<F>>,
         &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
@@ -235,7 +200,7 @@ where
     pub(crate) fn multi_pairing(
         self: &Self,
         ctx: &mut Context<F>,
-        prepared: &AssignedPreparedProof<F, FpChip<F, Fq>>,
+        prepared: &AssignedPreparedProof<F>,
     ) -> FqPoint<F> {
         // TODO: try to make this more generic.  Current problem is that
         // halo2-ecc::bn254::pairing::PairingChip insists on a
@@ -244,14 +209,7 @@ where
         // FieldChip trait, say).  So we cannot pass in self.fp_chip, which is
         // a generic FieldChip.
 
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let pairing_chip = PairingChip::<F>::new(&fp_chip);
+        let pairing_chip = PairingChip::<F>::new(self.fp_chip);
         let pair_refs = Self::prepared_proof_to_pair_refs(prepared);
         let miller_out = pairing_chip.multi_miller_loop(ctx, pair_refs);
         pairing_chip.final_exp(ctx, miller_out)
@@ -263,14 +221,7 @@ where
         ctx: &mut Context<F>,
         final_exp_out: &FqPoint<F>,
     ) {
-        let range_chip =
-            RangeChip::<F>::default(self.fp_chip.range().lookup_bits());
-        let fp_chip = FpChip::<F, Fq>::new(
-            &range_chip,
-            self.fp_chip.limb_bits(),
-            self.fp_chip.num_limbs(),
-        );
-        let fp12_chip = Fp12Chip::<F>::new(&fp_chip);
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
         fp12_chip.assert_equal(ctx, final_exp_out, fp12_one);
     }
@@ -281,11 +232,8 @@ where
     pub fn verify(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine /*C1, C2*/>,
-        proofs: &Vec<(
-            AssignedProof<F, FpChip<F, Fq>>,
-            AssignedPublicInputs<F>,
-        )>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
+        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
         let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);
@@ -298,7 +246,7 @@ where
 /// Return accumulated public inputs
 pub fn process_public_inputs<F: ScalarField>(
     ctx: &mut Context<F>,
-    powers: Vec<AssignedValue<F>>,
+    powers: &Vec<AssignedValue<F>>,
     public_inputs: Vec<AssignedPublicInputs<F>>,
 ) -> AssignedPublicInputs<F> {
     let gate = GateChip::default();
@@ -333,7 +281,7 @@ pub fn scalar_powers<F: ScalarField>(
 }
 
 /// Returns `(scalar_i * A_i, B_i)`
-pub fn scale_pairs<'a /*, C1*/, F>(
+pub fn scale_pairs<'a, F>(
     field_chip: &FpChip<'a, F, Fq>,
     ctx: &mut Context<F>,
     scalars: Vec<AssignedValue<F>>,
@@ -346,11 +294,7 @@ pub fn scale_pairs<'a /*, C1*/, F>(
     EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>,
 )>
 where
-    // C1: CurveAffineExt,
     F: PrimeField + ScalarField,
-    // C1::Base = Fq,
-    // FC: FieldChip<F, FieldType = C1::Base>
-    //     + Selectable<F, <FC as FieldChip<F>>::FieldPoint>,
 {
     let mut result = Vec::with_capacity(pairs.len());
     for ((g1, g2), scalar) in pairs.into_iter().zip(scalars.into_iter()) {

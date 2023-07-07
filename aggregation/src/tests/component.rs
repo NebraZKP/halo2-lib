@@ -223,7 +223,6 @@ mod multi_pairing {
         ecc::{EcPoint, EccChip},
         fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
     };
-    use std::marker::PhantomData;
 
     #[derive(Debug, Deserialize)]
     struct MultiPairing {
@@ -245,10 +244,7 @@ mod multi_pairing {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<G1Affine, G2Affine, _, _> {
-            fp_chip: &fp_chip,
-            _f: PhantomData,
-        };
+        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -286,7 +282,7 @@ mod multi_pairing {
             )
         }
 
-        let prepared = AssignedPreparedProof::<Fr, FpChip<_, Fq>> {
+        let prepared = AssignedPreparedProof::<Fr> {
             ab_pairs: prepared_proof
                 .ab_pairs
                 .iter()
@@ -373,14 +369,13 @@ mod pairing_check {
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::{
             arithmetic::Field,
-            halo2curves::bn256::{Fq, Fq12, G2Affine},
+            halo2curves::bn256::{Fq, Fq12},
         },
     };
     use halo2_ecc::{
         bn254::Fp12Chip,
         fields::{fp::FpChip, FieldChip},
     };
-    use std::marker::PhantomData;
 
     #[derive(Deserialize, Debug)]
     struct PairingCheck {}
@@ -400,10 +395,7 @@ mod pairing_check {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<G1Affine, G2Affine, _, _> {
-            fp_chip: &fp_chip,
-            _f: PhantomData,
-        };
+        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
 
         // Test valid and invalid results.
 
