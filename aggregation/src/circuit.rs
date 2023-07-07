@@ -121,9 +121,9 @@ where
         let (proofs, public_inputs): (Vec<_>, Vec<_>) =
             proofs.into_iter().unzip();
         let processed_public_inputs =
-            Self::compute_f_js(ctx, &r_powers, &public_inputs);
-        // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
+            Self::compute_f_js(ctx, &r_powers, &r_sum, &public_inputs);
 
+        // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
         let processed_public_inputs: Vec<_> = processed_public_inputs
             .into_iter()
             .map(|scalar| vec![scalar])
@@ -190,19 +190,28 @@ where
     pub(crate) fn compute_f_js(
         ctx: &mut Context<F>,
         r_powers: &Vec<AssignedValue<F>>,
+        r_sum: &AssignedValue<F>,
         public_inputs: &Vec<AssignedPublicInputs<F>>,
     ) -> Vec<AssignedValue<F>> {
         let gate = GateChip::default();
         let num_pub_in = public_inputs[0].0.len();
-        let f: Vec<AssignedValue<F>> = (0..num_pub_in)
-            .map(|j| {
-                // Combine jth public input from each proof
+
+        // Compute the f_j values:
+        // f_0 = r_sum
+        // f_j = \sum_{i=0}^{N-1} r^i pi[i][j]
+
+        let f_js: Vec<AssignedValue<F>> = once(r_sum.clone())
+            .chain((0..num_pub_in).map(|j| {
+                // Iterator over the jth public input of each proof
                 let inputs =
                     public_inputs.iter().map(|pub_in| pub_in.0[j].into());
+                // TODO: clone here is because QuantumCell doesn't implement
+                // From<&AssignedValue<F>>
                 gate.inner_product(ctx, r_powers.clone(), inputs)
-            })
+            }))
             .collect();
-        f
+        assert!(f_js.len() == num_pub_in + 1);
+        f_js
     }
 
     pub(crate) fn prepared_proof_to_pair_refs<'prep>(

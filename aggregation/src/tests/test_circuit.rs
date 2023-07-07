@@ -48,7 +48,7 @@ fn batch_verify_circuit(
 }
 
 // TODO: enable this when test passes
-// #[test]
+#[test]
 #[allow(dead_code)]
 fn test_aggregation_circuit() {
     const PATH: &str = "src/tests/configs/circuit.config";
