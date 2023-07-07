@@ -10,7 +10,6 @@ use halo2_base::{
     AssignedValue, Context,
 };
 use halo2_ecc::{
-    bigint::ProperCrtUint,
     bn254::{pairing::PairingChip, Fp12Chip, FqPoint},
     ecc::{scalar_multiply, EcPoint, EccChip},
     fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
@@ -22,12 +21,17 @@ const WINDOW_BITS: usize = 4;
 
 // In-circuit objects
 
+pub type G1Point<'a, F> =
+    EcPoint<F, <FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>;
+pub type G2Point<'a, F> =
+    EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>;
+
 /// In-circuit Groth16 proof
 #[derive(Clone, Debug)]
-pub struct AssignedProof<F: PrimeField + ScalarField> {
-    pub a: EcPoint<F, ProperCrtUint<F>>,
-    pub b: EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    pub c: EcPoint<F, ProperCrtUint<F>>,
+pub struct AssignedProof<'a, F: PrimeField + ScalarField> {
+    pub a: G1Point<'a, F>,
+    pub b: G2Point<'a, F>,
+    pub c: G1Point<'a, F>,
 }
 
 /// In-circuit public inputs
@@ -38,23 +42,11 @@ pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
 
 /// In-circuit equivalent of PreparedProof.
 // TODO: handle hard-coded values
-pub(crate) struct AssignedPreparedProof<F: PrimeField + ScalarField> {
-    pub ab_pairs: Vec<(
-        EcPoint<F, ProperCrtUint<F>>,
-        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    )>,
-    pub rp: (
-        EcPoint<F, ProperCrtUint<F>>,
-        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    ),
-    pub pi: (
-        EcPoint<F, ProperCrtUint<F>>,
-        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    ),
-    pub zc: (
-        EcPoint<F, ProperCrtUint<F>>,
-        EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    ),
+pub(crate) struct AssignedPreparedProof<'a, F: PrimeField + ScalarField> {
+    pub ab_pairs: Vec<(G1Point<'a, F>, G2Point<'a, F>)>,
+    pub rp: (G1Point<'a, F>, G2Point<'a, F>),
+    pub pi: (G1Point<'a, F>, G2Point<'a, F>),
+    pub zc: (G1Point<'a, F>, G2Point<'a, F>),
 }
 
 pub struct BatchVerifier<'a, F>
@@ -91,31 +83,55 @@ where
         }
     }
 
-    fn prepare_proofs(
+    /// Execute the top-level batch verification by accumulating (as far as
+    /// possible) all proofs and public inputs, and performing a single large
+    /// pairing check.
+    pub fn verify(
+        self: &Self,
+        builder: &mut GateThreadBuilder<F>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
+        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
+        r: AssignedValue<F>,
+    ) {
+        let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);
+        let ctx = builder.main(0);
+        let pairing_out = self.multi_pairing(ctx, &prepared);
+        self.check_pairing_result(ctx, &pairing_out);
+    }
+
+    pub(crate) fn prepare_proofs(
         self: &Self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) -> AssignedPreparedProof<F> {
+        let gate = GateChip::default();
         let ecc_chip = EccChip::new(self.fp_chip);
 
-        let r_powers = scalar_powers(builder.main(0), r, proofs.len());
+        let ctx = builder.main(0);
+
+        // Compute the powers of r, and their sum
+        let r_powers = Self::scalar_powers(ctx, r, proofs.len());
+        // TODO: clone() here is required by GateInstructions.  Why does it
+        // need a full copy?
+        let r_sum = gate.sum(ctx, r_powers.clone());
 
         // Process public inputs
         let (proofs, public_inputs): (Vec<_>, Vec<_>) =
             proofs.into_iter().unzip();
         let processed_public_inputs =
-            process_public_inputs(builder.main(0), &r_powers, public_inputs);
+            Self::compute_f_js(ctx, &r_powers, &public_inputs);
         // `fixed_base_msm_in` expects a Vec<Vec<_>> of scalars
+
         let processed_public_inputs: Vec<_> = processed_public_inputs
-            .0
             .into_iter()
             .map(|scalar| vec![scalar])
             .collect();
+
         let pi = ecc_chip.fixed_base_msm_in(
             builder,
-            &vk.s, // TODO: Make vk generic over field or else make this specialized to Bn base
+            &vk.s,
             processed_public_inputs,
             F::NUM_BITS as usize,
             WINDOW_BITS,
@@ -123,17 +139,12 @@ where
         );
         let minus_pi = ecc_chip.negate(builder.main(0), pi);
 
-        let (pairs, c_points): (Vec<_>, Vec<_>) = proofs
+        // Split into Vec<(A,B)>, and Vec<C>
+        let (ab_pairs, c_points): (Vec<_>, Vec<_>) = proofs
             .into_iter()
             .map(|proof| ((proof.a, proof.b), proof.c))
             .unzip();
-        // Scale (A, B) pairs
-        let ab_pairs = scale_pairs::<_>(
-            self.fp_chip,
-            builder.main(0),
-            r_powers.clone(),
-            pairs,
-        );
+
         // Combine C points
         let zc = ecc_chip.variable_base_msm_in::<G1Affine>(
             builder,
@@ -148,11 +159,12 @@ where
         );
         let minus_zc = ecc_chip.negate(builder.main(0), zc);
 
-        // Compute - r_sum * P
-        let gate = GateChip::default();
-        let ctx = builder.main(0);
+        // Scale (A, B) pairs
+        let scaled_ab_pairs =
+            self.scale_pairs(builder.main(0), r_powers, ab_pairs);
 
-        let r_sum = gate.sum(ctx, r_powers);
+        // Compute - r_sum * P
+        let ctx = builder.main(0);
         let rp = ecc_chip.fixed_base_scalar_mult(
             ctx,
             &vk.alpha,
@@ -166,26 +178,40 @@ where
         let g2_chip = EccChip::new(&fp2_chip);
 
         AssignedPreparedProof {
-            ab_pairs,
+            ab_pairs: scaled_ab_pairs,
             rp: (minus_rp, g2_chip.assign_constant_point(ctx, vk.beta)),
             pi: (minus_pi, g2_chip.assign_constant_point(ctx, vk.gamma)),
             zc: (minus_zc, g2_chip.assign_constant_point(ctx, vk.delta)),
         }
     }
 
-    fn prepared_proof_to_pair_refs<'prep>(
-        prepared: &'prep AssignedPreparedProof<F>,
-    ) -> Vec<(
-        &'prep EcPoint<F, ProperCrtUint<F>>,
-        &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-    )> {
+    /// Return the `f_j` values (where f_j is the accumulation of the j-th
+    /// public input for each proof).
+    pub(crate) fn compute_f_js(
+        ctx: &mut Context<F>,
+        r_powers: &Vec<AssignedValue<F>>,
+        public_inputs: &Vec<AssignedPublicInputs<F>>,
+    ) -> Vec<AssignedValue<F>> {
+        let gate = GateChip::default();
+        let num_pub_in = public_inputs[0].0.len();
+        let f: Vec<AssignedValue<F>> = (0..num_pub_in)
+            .map(|j| {
+                // Combine jth public input from each proof
+                let inputs =
+                    public_inputs.iter().map(|pub_in| pub_in.0[j].into());
+                gate.inner_product(ctx, r_powers.clone(), inputs)
+            })
+            .collect();
+        f
+    }
+
+    pub(crate) fn prepared_proof_to_pair_refs<'prep>(
+        prepared: &'prep AssignedPreparedProof<'prep, F>,
+    ) -> Vec<(&'prep G1Point<'prep, F>, &'prep G2Point<'prep, F>)> {
         // TODO: consider moving this to an
         //   impl From<AssignedPreparedProof> for Vec<(&EcPoint, &EcPoint)>
 
-        let pairs: Vec<(
-            &'prep EcPoint<F, ProperCrtUint<F>>,
-            &'prep EcPoint<F, FieldVector<ProperCrtUint<F>>>,
-        )> = prepared
+        let pairs: Vec<(&'prep G1Point<F>, &'prep G2Point<F>)> = prepared
             .ab_pairs
             .iter()
             .chain(once(&prepared.rp))
@@ -197,10 +223,10 @@ where
         pairs
     }
 
-    pub(crate) fn multi_pairing(
+    pub(crate) fn multi_pairing<'prep>(
         self: &Self,
         ctx: &mut Context<F>,
-        prepared: &AssignedPreparedProof<F>,
+        prepared: &'prep AssignedPreparedProof<'prep, F>,
     ) -> FqPoint<F> {
         // TODO: try to make this more generic.  Current problem is that
         // halo2-ecc::bn254::pairing::PairingChip insists on a
@@ -226,89 +252,46 @@ where
         fp12_chip.assert_equal(ctx, final_exp_out, fp12_one);
     }
 
-    /// Execute the top-level batch verification by accumulating (as far as
-    /// possible) all proofs and public inputs, and performing a single large
-    /// pairing check.
-    pub fn verify(
-        self: &Self,
-        builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine>,
-        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
+    /// Return r^0, r, ... r^{len - 1}
+    pub(crate) fn scalar_powers(
+        ctx: &mut Context<F>,
         r: AssignedValue<F>,
-    ) {
-        let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);
-        let ctx = builder.main(0);
-        let pairing_out = self.multi_pairing(ctx, &prepared);
-        self.check_pairing_result(ctx, &pairing_out);
+        len: usize,
+    ) -> Vec<AssignedValue<F>> {
+        let gate = GateChip::default();
+        let mut result = Vec::with_capacity(len);
+        result.push(ctx.load_constant(F::one()).into());
+        result.push(r.into());
+        let mut current = r.clone();
+        for _ in 2..len {
+            current = gate.mul(ctx, current, r);
+            result.push(current);
+        }
+        debug_assert_eq!(result.len(), len);
+        result
     }
-}
 
-/// Return accumulated public inputs
-pub fn process_public_inputs<F: ScalarField>(
-    ctx: &mut Context<F>,
-    powers: &Vec<AssignedValue<F>>,
-    public_inputs: Vec<AssignedPublicInputs<F>>,
-) -> AssignedPublicInputs<F> {
-    let gate = GateChip::default();
-    let num_pub_in = public_inputs[0].0.len();
-    let f: Vec<AssignedValue<F>> = (0..num_pub_in)
-        .map(|j| {
-            // Combine jth public input from each proof
-            let inputs = public_inputs.iter().map(|pub_in| pub_in.0[j].into());
-            gate.inner_product(ctx, powers.clone(), inputs)
-        })
-        .collect();
-    AssignedPublicInputs(f)
-}
-
-/// Return r^0, r, ... r^{len - 1}
-pub fn scalar_powers<F: ScalarField>(
-    ctx: &mut Context<F>,
-    r: AssignedValue<F>,
-    len: usize,
-) -> Vec<AssignedValue<F>> {
-    let gate = GateChip::default();
-    let mut result = Vec::with_capacity(len);
-    result.push(ctx.load_constant(F::one()).into());
-    result.push(r.into());
-    let mut current = r.clone();
-    for _ in 2..len {
-        current = gate.mul(ctx, current, r);
-        result.push(current);
+    /// Returns `(scalar_i * A_i, B_i)`
+    pub(crate) fn scale_pairs(
+        self: &Self,
+        ctx: &mut Context<F>,
+        scalars: Vec<AssignedValue<F>>,
+        pairs: Vec<(G1Point<F>, G2Point<F>)>,
+    ) -> Vec<(G1Point<'a, F>, G2Point<'a, F>)> {
+        let mut result = Vec::with_capacity(pairs.len());
+        for ((g1, g2), scalar) in pairs.into_iter().zip(scalars.into_iter()) {
+            result.push((
+                scalar_multiply::<_, FpChip<F, Fq>, G1Affine>(
+                    self.fp_chip,
+                    ctx,
+                    g1,
+                    vec![scalar],
+                    F::NUM_BITS as usize,
+                    WINDOW_BITS,
+                ),
+                g2,
+            ))
+        }
+        result
     }
-    debug_assert_eq!(result.len(), len);
-    result
-}
-
-/// Returns `(scalar_i * A_i, B_i)`
-pub fn scale_pairs<'a, F>(
-    field_chip: &FpChip<'a, F, Fq>,
-    ctx: &mut Context<F>,
-    scalars: Vec<AssignedValue<F>>,
-    pairs: Vec<(
-        EcPoint<F, <FpChip<F, Fq> as FieldChip<F>>::FieldPoint>,
-        EcPoint<F, FieldVector<<FpChip<F, Fq> as FieldChip<F>>::FieldPoint>>,
-    )>,
-) -> Vec<(
-    EcPoint<F, <FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>,
-    EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>,
-)>
-where
-    F: PrimeField + ScalarField,
-{
-    let mut result = Vec::with_capacity(pairs.len());
-    for ((g1, g2), scalar) in pairs.into_iter().zip(scalars.into_iter()) {
-        result.push((
-            scalar_multiply::<_, FpChip<F, Fq>, G1Affine>(
-                field_chip,
-                ctx,
-                g1,
-                vec![scalar],
-                F::NUM_BITS as usize,
-                WINDOW_BITS,
-            ),
-            g2,
-        ))
-    }
-    result
 }
