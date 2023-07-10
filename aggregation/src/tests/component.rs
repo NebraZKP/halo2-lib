@@ -364,7 +364,7 @@ mod multi_pairing {
 
 mod pairing_check {
     use super::*;
-    use crate::circuit::BatchVerifier;
+    use crate::{circuit::BatchVerifier, tests::run_circuit_mock_test_failure};
     use halo2_base::{
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::{
@@ -374,7 +374,7 @@ mod pairing_check {
     };
     use halo2_ecc::{
         bn254::Fp12Chip,
-        fields::{fp::FpChip, FieldChip},
+        fields::{fp::FpChip, FieldChip, FieldExtConstructor},
     };
 
     #[derive(Deserialize, Debug)]
@@ -384,6 +384,7 @@ mod pairing_check {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &PairingCheck,
+        output_value: Fq12,
     ) {
         let mut ctx = builder.main(0);
 
@@ -399,55 +400,18 @@ mod pairing_check {
 
         // Test valid and invalid results.
 
-        let fp12_one = Fq12::one();
-
         let fp12_chip = Fp12Chip::<Fr>::new(&fp_chip);
-        let pairing_result = fp12_chip.load_private(&mut ctx, fp12_one);
+        let pairing_result = fp12_chip.load_private(&mut ctx, output_value);
         batch_verifier.check_pairing_result(&mut ctx, &pairing_result);
     }
 
     #[test]
     fn test() {
-        // let f1 = Fq::one();
-        // let f0 = Fq::zero();
-        // let fp12_not_ones = vec![
-        //     Fq12::new([f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f1, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f1, f0, f0, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f1, f0, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f1, f0, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f1, f0, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f0, f1, f0, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f1, f0, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f1, f0, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f1, f0]),
-        //     Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f1]),
-        // ];
-
-        // mock_test_component_fails(
-        //     "src/tests/configs/pairing_check.config",
-        //     |ctx| build_pairing_check_circuit(ctx, Fp12::zero()),
-        // );
-
-        // mock_test_component::<PairingCheck>(
-        //     "src/tests/configs/pairing_check.config",
-        //     |ctx| build_pairing_check_circuit(ctx, one),
-        // );
-
-        // mock_test_component::<PairingCheck>(
-        //     "src/tests/configs/pairing_check.config",
-        //     |ctx, params| build_pairing_check_circuit(ctx, params, one),
-        // );
-
-        // mock_test_component::<PairingCheck>(
-        //     "src/tests/configs/pairing_check.config",
-        //     |ctx, params| build_pairing_check_circuit(ctx, two),
-        // );
-
         run_circuit_test(
             "src/tests/configs/pairing_check.config",
-            build_circuit,
+            |ctx, basic_config, test_config| {
+                build_circuit(ctx, basic_config, test_config, Fq12::one())
+            },
         );
     }
 
@@ -455,7 +419,43 @@ mod pairing_check {
     fn mock_test() {
         run_circuit_mock_test(
             "src/tests/configs/pairing_check.config",
-            build_circuit,
+            |ctx, basic_config, test_config| {
+                build_circuit(ctx, basic_config, test_config, Fq12::one())
+            },
         );
+    }
+
+    #[test]
+    fn mock_failure_test() {
+        // Ensure that non-zero outputs from the pairing are detected by the
+        // circuit.  (This case is rather trivial, but for now it exercises the
+        // run_circuit_mock_test_failure function).
+
+        let f1 = Fq::one();
+        let f0 = Fq::zero();
+        let fp12_not_ones = vec![
+            Fq12::new([f1 + f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f1, f0, f0, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f1, f0, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f1, f0, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f1, f0, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f1, f0, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f0, f1, f0, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f1, f0, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f1, f0, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f1, f0]),
+            Fq12::new([f1, f0, f0, f0, f0, f0, f0, f0, f0, f0, f0, f1]),
+        ];
+
+        for val in fp12_not_ones.iter() {
+            run_circuit_mock_test_failure(
+                "src/tests/configs/pairing_check.config",
+                |ctx, basic_config, test_config| {
+                    build_circuit(ctx, basic_config, test_config, *val)
+                },
+            );
+        }
     }
 }

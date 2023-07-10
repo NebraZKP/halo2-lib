@@ -65,7 +65,6 @@ pub struct BasicConfig {
 }
 
 fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
-    println!("line: {line:?}");
     let basic_config: BasicConfig = serde_json::from_str(line).unwrap();
     println!("basic config: {basic_config:?}");
     let test_config: C = serde_json::from_str(line).unwrap();
@@ -196,5 +195,49 @@ pub fn run_circuit_mock_test<
         MockProver::run(k, &circuit, vec![])
             .unwrap()
             .assert_satisfied();
+    }
+}
+
+/// Run `MockProver` on a circuit from a config located at `path`.  Operation
+/// is exactly the same as run_circuit_test, except that `MockProver` is used.
+/// This often gives more informative error messages.
+pub fn run_circuit_mock_test_failure<
+    C: DeserializeOwned + Debug,
+    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C),
+>(
+    path: impl AsRef<Path>,
+    build_circuit: BC,
+) {
+    let params_file = File::open(path)
+        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_reader = BufReader::new(params_file);
+    for line in params_reader.lines() {
+        let (basic_config, test_config) =
+            parse_configs(line.as_ref().unwrap().as_str());
+
+        std::env::set_var("LOOKUP_BITS", basic_config.lookup_bits.to_string());
+
+        let k = basic_config.degree;
+
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+
+        build_circuit(&mut builder, &basic_config, &test_config);
+
+        builder.config(k as usize, Some(10));
+        let circuit = RangeCircuitBuilder::mock(builder);
+
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        let res = prover.verify();
+        match res {
+            Ok(_) => {
+                panic!("Expected circuit failure");
+            }
+            Err(_failures) => {
+                // TODO: Determine how to allow the caller to specify a
+                // specific failiure. (_failures is a vector of error codes,
+                // so need to consider exactly what the caller should
+                // provide).
+            }
+        }
     }
 }
