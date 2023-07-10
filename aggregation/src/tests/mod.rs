@@ -230,7 +230,7 @@ pub fn run_circuit_mock_test_failure<
         let res = prover.verify();
         match res {
             Ok(_) => {
-                panic!("Expected circuit failiure");
+                panic!("Expected circuit failure");
             }
             Err(_failures) => {
                 // TODO: Determine how to allow the caller to specify a
