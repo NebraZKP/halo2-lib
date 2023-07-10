@@ -7,6 +7,113 @@ use rand_core::OsRng;
 use serde::Deserialize;
 use std::fmt::Debug;
 
+pub mod compute_r {
+    use super::super::*;
+    use crate::{
+        circuit::{AssignedPublicInputs, BatchVerifier},
+        native::{load_proof_and_inputs, load_vk, PublicInputs},
+    };
+    use halo2_base::{
+        gates::builder::GateThreadBuilder,
+        halo2_proofs::halo2curves::bn256::{Fq, Fr},
+        safe_types::RangeChip,
+    };
+    use halo2_ecc::fields::fp::FpChip;
+
+    #[derive(Debug, Deserialize)]
+    struct ComputeR {}
+
+    fn build_circuit(
+        builder: &mut GateThreadBuilder<Fr>,
+        basic_config: &BasicConfig,
+        _test_config: &ComputeR,
+    ) {
+        let range = RangeChip::<Fr>::default(basic_config.lookup_bits);
+        let fp_chip = FpChip::<Fr, Fq>::new(
+            &range,
+            basic_config.limb_bits,
+            basic_config.num_limbs,
+        );
+        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+
+        let mut ctx = builder.main(0);
+
+        let vk = load_vk(VK_FILE);
+        let (proof1, _inputs1) = load_proof_and_inputs(PROOF1_FILE);
+        let fake_pi = vec![
+            PublicInputs(vec![Fr::from(1), Fr::from(1), Fr::from(1)]),
+            PublicInputs(vec![Fr::from(1), Fr::from(1), Fr::from(2)]),
+        ];
+
+        let a_proof1 = batch_verifier.assign_proof(ctx, &proof1);
+        let a_pi: Vec<AssignedPublicInputs<Fr>> = fake_pi
+            .iter()
+            .map(|pi| batch_verifier.assign_public_inputs(&mut ctx, pi))
+            .collect();
+
+        // p_i_1 has inputs: [(1,1,1), (1,1,1)]
+        let r_1_val = {
+            let p_i_1 = vec![
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+            ];
+            let r_1 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_1);
+            let r_1_val = r_1.value().clone();
+            println!("r_1_val: {r_1_val:?}");
+            r_1_val
+        };
+
+        // p_i_2 has inputs: [(1,1,1), (1,1,2)]
+        let r_2_val = {
+            let p_i_2 = vec![
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[1].clone()),
+            ];
+            let r_2 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_2);
+            let r_2_val = r_2.value().clone();
+            println!("r_2_val: {r_2_val:?}");
+            r_2_val
+        };
+        assert_ne!(r_1_val, r_2_val);
+
+        // p_i_3 has inputs (8 proofs, 3 inputs each): [
+        //   (1,1,1), (1,1,1), (1,1,1), (1,1,1),
+        //   (1,1,1), (1,1,1), (1,1,1), (1,1,2)
+        // ]
+        let r_3_val = {
+            let p_i_3 = vec![
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[0].clone()),
+                (a_proof1.clone(), a_pi[1].clone()),
+            ];
+            let r_3 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_3);
+            let r_3_val = r_3.value().clone();
+            println!("r_3_val: {r_3_val:?}");
+            r_3_val
+        };
+        assert_ne!(r_2_val, r_3_val);
+        assert_ne!(r_1_val, r_3_val);
+    }
+
+    const PATH: &str = "src/tests/configs/scalar_powers.config";
+
+    #[test]
+    fn test_mock() {
+        run_circuit_mock_test(PATH, build_circuit);
+    }
+
+    #[test]
+    #[cfg(feature = "all_tests")]
+    fn test() {
+        run_circuit_test(PATH, build_circuit);
+    }
+}
+
 pub mod scalar_powers {
     use super::*;
     use crate::circuit::BatchVerifier;

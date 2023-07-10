@@ -10,7 +10,6 @@ use halo2_base::{
     safe_types::RangeChip,
 };
 use halo2_ecc::bn254::FpChip;
-use std::iter::once;
 
 const PATH: &str = "src/tests/configs/circuit.config";
 
@@ -36,14 +35,17 @@ fn batch_verify_circuit(
         .map(|p_i| {
             (
                 batch_verifier.assign_proof(builder.main(0), &p_i.0),
-                batch_verifier
-                    .assign_public_inputs(builder.main(0), p_i.1.clone()),
+                batch_verifier.assign_public_inputs(builder.main(0), &p_i.1),
             )
         })
         .collect();
 
-    // TODO: correct challenge r
-    let r = builder.main(0).assign_witnesses(once(Fr::from(2)))[0];
+    // Compute the coefficient r
+    let r = BatchVerifier::<_>::compute_r(
+        builder.main(0),
+        vk,
+        &assigned_proofs_and_inputs,
+    );
 
     // Call `batch_verify`
     batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs, r);

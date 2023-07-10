@@ -14,7 +14,17 @@ use halo2_ecc::{
     ecc::{scalar_multiply, EcPoint, EccChip},
     fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
 };
+use poseidon::PoseidonChip;
 use std::iter::once;
+
+pub const DEFAULT_NUM_PROOFS: usize = 8;
+pub const DEFAULT_NUM_PUBLIC_INPUTS: usize = 3;
+pub const DEFAULT_NUM_PUBLIC_INPUTS_PLUS_ONE: usize =
+    DEFAULT_NUM_PUBLIC_INPUTS + 1;
+
+// TODO: determine the correct values for these Poseidon constants.
+const R_F: usize = 8;
+const R_P: usize = 57;
 
 /// TODO: Is it worth allowing this to be variable?
 const WINDOW_BITS: usize = 4;
@@ -49,32 +59,42 @@ pub(crate) struct AssignedPreparedProof<'a, F: PrimeField + ScalarField> {
     pub zc: (G1Point<'a, F>, G2Point<'a, F>),
 }
 
-pub const DEFAULT_NUM_PROOFS: usize = 8;
-pub const DEFAULT_NUM_PUBLIC_INPUTS: usize = 3;
-
 pub struct BatchVerifier<
     'a,
     F,
     const NUM_PROOFS: usize = DEFAULT_NUM_PROOFS,
     const NUM_PUBLIC_INPUTS: usize = DEFAULT_NUM_PUBLIC_INPUTS,
+    const NUM_PUBLIC_INPUTS_PLUS_ONE: usize = DEFAULT_NUM_PUBLIC_INPUTS_PLUS_ONE,
 > where
     F: PrimeField + ScalarField,
 {
     pub fp_chip: &'a FpChip<'a, F, Fq>,
 }
 
-impl<'a, F, const NUM_PROOFS: usize, const NUM_PUBLIC_INPUTS: usize>
-    BatchVerifier<'a, F, NUM_PROOFS, NUM_PUBLIC_INPUTS>
+impl<
+        'a,
+        F,
+        const NUM_PROOFS: usize,
+        const NUM_PUBLIC_INPUTS: usize,
+        const NUM_PUBLIC_INPUTS_PLUS_ONE: usize,
+    >
+    BatchVerifier<
+        'a,
+        F,
+        NUM_PROOFS,
+        NUM_PUBLIC_INPUTS,
+        NUM_PUBLIC_INPUTS_PLUS_ONE,
+    >
 where
     F: PrimeField + ScalarField,
 {
     pub fn assign_public_inputs(
         self: &Self,
         ctx: &mut Context<F>,
-        inputs: PublicInputs<F>,
+        inputs: &PublicInputs<F>,
     ) -> AssignedPublicInputs<F> {
         assert!(inputs.0.len() == NUM_PUBLIC_INPUTS);
-        AssignedPublicInputs(ctx.assign_witnesses(inputs.0))
+        AssignedPublicInputs(ctx.assign_witnesses(inputs.0.iter().copied()))
     }
 
     pub fn assign_proof(
@@ -90,6 +110,29 @@ where
             b: g2_chip.assign_point(ctx, proof.b),
             c: g1_chip.assign_point(ctx, proof.c),
         }
+    }
+
+    pub fn compute_r(
+        ctx: &mut Context<F>,
+        _vk: &VerificationKey<G1Affine, G2Affine>,
+        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
+    ) -> AssignedValue<F> {
+        assert!(NUM_PUBLIC_INPUTS_PLUS_ONE == NUM_PUBLIC_INPUTS + 1);
+
+        // TODO: Seed the poseidon state with (some hash of) the VK
+
+        let mut poseidon = PoseidonChip::<
+            F,
+            NUM_PUBLIC_INPUTS_PLUS_ONE,
+            NUM_PUBLIC_INPUTS,
+        >::new(ctx, R_F, R_P)
+        .unwrap();
+        for pi in proofs.iter().map(|p_i| &p_i.1) {
+            poseidon.update(pi.0.as_slice());
+        }
+
+        let gate = GateChip::default();
+        poseidon.squeeze(ctx, &gate).unwrap()
     }
 
     /// Execute the top-level batch verification by accumulating (as far as
