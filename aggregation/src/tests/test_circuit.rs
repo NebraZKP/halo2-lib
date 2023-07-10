@@ -47,9 +47,7 @@ fn batch_verify_circuit(
     batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs, r);
 }
 
-// TODO: enable this when test passes
-// #[test]
-#[allow(dead_code)]
+#[test]
 fn test_aggregation_circuit() {
     const PATH: &str = "src/tests/configs/circuit.config";
 

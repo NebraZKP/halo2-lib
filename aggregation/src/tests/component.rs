@@ -9,7 +9,7 @@ use std::fmt::Debug;
 
 pub mod scalar_powers {
     use super::*;
-    use crate::circuit::scalar_powers;
+    use crate::circuit::BatchVerifier;
 
     #[derive(Debug, Deserialize)]
     /// A circuit to compute powers of `base` from `0` to `len - 1`.
@@ -28,7 +28,7 @@ pub mod scalar_powers {
         let ctx = builder.main(0);
 
         let base = ctx.load_witness(Fr::from(test_config.base));
-        let result = scalar_powers(ctx, base, test_config.len);
+        let result = BatchVerifier::scalar_powers(ctx, base, test_config.len);
 
         let answer = (0..test_config.len)
             .map(|i| Fr::from(test_config.base.pow(i as u32)));
@@ -66,7 +66,7 @@ pub mod scale_pairs {
     };
 
     use super::*;
-    use crate::circuit::scale_pairs;
+    use crate::circuit::BatchVerifier;
 
     #[derive(Debug, Deserialize)]
     /// A circuit to compute `(scalar_i * A_i, B_i)`
@@ -86,6 +86,7 @@ pub mod scale_pairs {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
+        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -120,7 +121,7 @@ pub mod scale_pairs {
 
         // Scale pairs
         let scaled_pairs =
-            scale_pairs::<Fr>(&fp_chip, ctx, assigned_r, assigned_pairs);
+            batch_verifier.scale_pairs(ctx, assigned_r, assigned_pairs);
 
         // Compute answers, assign to circuit
         let assigned_answers: Vec<_> = a
