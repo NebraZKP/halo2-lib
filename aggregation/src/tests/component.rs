@@ -28,7 +28,8 @@ pub mod scalar_powers {
         let ctx = builder.main(0);
 
         let base = ctx.load_witness(Fr::from(test_config.base));
-        let result = BatchVerifier::scalar_powers(ctx, base, test_config.len);
+        let result =
+            BatchVerifier::<_>::scalar_powers(ctx, base, test_config.len);
 
         let answer = (0..test_config.len)
             .map(|i| Fr::from(test_config.base.pow(i as u32)));
@@ -87,7 +88,7 @@ pub mod scale_pairs {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -254,7 +255,7 @@ mod multi_pairing {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -415,7 +416,7 @@ mod pairing_check {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
 
         // Test valid and invalid results.
 

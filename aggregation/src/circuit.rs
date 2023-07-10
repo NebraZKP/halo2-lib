@@ -49,14 +49,22 @@ pub(crate) struct AssignedPreparedProof<'a, F: PrimeField + ScalarField> {
     pub zc: (G1Point<'a, F>, G2Point<'a, F>),
 }
 
-pub struct BatchVerifier<'a, F>
-where
+pub const DEFAULT_NUM_PROOFS: usize = 8;
+pub const DEFAULT_NUM_PUBLIC_INPUTS: usize = 3;
+
+pub struct BatchVerifier<
+    'a,
+    F,
+    const NUM_PROOFS: usize = DEFAULT_NUM_PROOFS,
+    const NUM_PUBLIC_INPUTS: usize = DEFAULT_NUM_PUBLIC_INPUTS,
+> where
     F: PrimeField + ScalarField,
 {
     pub fp_chip: &'a FpChip<'a, F, Fq>,
 }
 
-impl<'a, F> BatchVerifier<'a, F>
+impl<'a, F, const NUM_PROOFS: usize, const NUM_PUBLIC_INPUTS: usize>
+    BatchVerifier<'a, F, NUM_PROOFS, NUM_PUBLIC_INPUTS>
 where
     F: PrimeField + ScalarField,
 {
@@ -65,6 +73,7 @@ where
         ctx: &mut Context<F>,
         inputs: PublicInputs<F>,
     ) -> AssignedPublicInputs<F> {
+        assert!(inputs.0.len() == NUM_PUBLIC_INPUTS);
         AssignedPublicInputs(ctx.assign_witnesses(inputs.0))
     }
 
@@ -93,6 +102,7 @@ where
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
+        assert!(proofs.len() == NUM_PROOFS);
         let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);
         let ctx = builder.main(0);
         let pairing_out = self.multi_pairing(ctx, &prepared);
