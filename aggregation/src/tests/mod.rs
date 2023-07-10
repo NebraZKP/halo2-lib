@@ -88,7 +88,7 @@ fn run_circuit_test<
     let params_file = File::open(path)
         .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
     let params_reader = BufReader::new(params_file);
-    for line in vec![params_reader.lines().next().unwrap()] {
+    for line in params_reader.lines() {
         let (basic_config, test_config) =
             parse_configs(line.as_ref().unwrap().as_str());
 
