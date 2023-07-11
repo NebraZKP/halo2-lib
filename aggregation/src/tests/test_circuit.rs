@@ -12,6 +12,8 @@ use halo2_base::{
 use halo2_ecc::bn254::FpChip;
 use std::iter::once;
 
+const PATH: &str = "src/tests/configs/circuit.config";
+
 #[derive(Debug, Deserialize)]
 struct TestConfig {}
 
@@ -47,10 +49,11 @@ fn batch_verify_circuit(
     batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs, r);
 }
 
-#[test]
-fn test_aggregation_circuit() {
-    const PATH: &str = "src/tests/configs/circuit.config";
-
+fn aggregation_circuit(
+    builder: &mut GateThreadBuilder<Fr>,
+    config: &BasicConfig,
+    _test_config: &TestConfig,
+) {
     // Read the vk
     let vk = load_vk(VK_FILE);
 
@@ -72,7 +75,16 @@ fn test_aggregation_circuit() {
         proofs_and_inputs[1].clone(),
     ];
 
-    run_circuit_mock_test(PATH, |builder, config, _tc: &TestConfig| {
-        batch_verify_circuit(builder, config, &vk, &proofs_and_inputs)
-    });
+    batch_verify_circuit(builder, config, &vk, &proofs_and_inputs)
+}
+
+#[test]
+fn test_aggregation_circuit_mock() {
+    run_circuit_mock_test(PATH, aggregation_circuit);
+}
+
+#[ignore = "takes too long"]
+#[test]
+fn test_aggregation_circuit() {
+    run_circuit_test(PATH, aggregation_circuit);
 }

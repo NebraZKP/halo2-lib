@@ -47,7 +47,7 @@ pub(crate) fn encode_g2(f: i32) -> G2Affine {
     G2Affine::from(G2::generator() * Fr::from(f as u64))
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // Kept for completeness and generating debug data
 pub(crate) fn encode_fr(f: &Fr) -> G1Affine {
     G1Affine::from(G1::generator() * f)
 }

@@ -42,13 +42,14 @@ pub mod scalar_powers {
     const PATH: &str = "src/tests/configs/scalar_powers.config";
 
     #[test]
-    fn test() {
-        run_circuit_test(PATH, build_circuit);
-    }
-
-    #[test]
     fn mock_test() {
         run_circuit_mock_test(PATH, build_circuit);
+    }
+
+    #[ignore = "takes too long"]
+    #[test]
+    fn test() {
+        run_circuit_test(PATH, build_circuit);
     }
 }
 
@@ -148,6 +149,13 @@ pub mod scale_pairs {
     }
 
     #[test]
+    fn test_mock() {
+        let path = "src/tests/configs/scale_pairs.config";
+        run_circuit_mock_test(path, build_circuit);
+    }
+
+    #[ignore = "takes too long"]
+    #[test]
     fn test() {
         let path = "src/tests/configs/scale_pairs.config";
         run_circuit_test(path, build_circuit);
@@ -192,13 +200,14 @@ pub mod fp_mul {
     const PATH: &str = "src/tests/configs/fp_mul.config";
 
     #[test]
-    fn test() {
-        run_circuit_test(PATH, build_circuit);
-    }
-
-    #[test]
     fn mock_test() {
         run_circuit_mock_test(PATH, build_circuit);
+    }
+
+    #[ignore = "takes too long"]
+    #[test]
+    fn test() {
+        run_circuit_test(PATH, build_circuit);
     }
 }
 
@@ -355,8 +364,17 @@ mod multi_pairing {
     }
 
     #[test]
-    fn test() {
+    fn test_mock() {
         run_circuit_mock_test(
+            "src/tests/configs/multi_pairing.config",
+            build_circuit,
+        );
+    }
+
+    #[ignore = "takes too long"]
+    #[test]
+    fn test() {
+        run_circuit_test(
             "src/tests/configs/multi_pairing.config",
             build_circuit,
         );
@@ -406,6 +424,7 @@ mod pairing_check {
         batch_verifier.check_pairing_result(&mut ctx, &pairing_result);
     }
 
+    #[ignore = "takes too long"]
     #[test]
     fn test() {
         run_circuit_test(
