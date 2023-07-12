@@ -590,12 +590,15 @@ mod pairing_check {
 
 mod hashing {
     use super::*;
-    use crate::circuit::hash_fq;
+    use crate::circuit::Hasher;
     use halo2_base::{
         gates::{builder::GateThreadBuilder, RangeChip},
-        halo2_proofs::halo2curves::bn256::Fq,
+        halo2_proofs::halo2curves::{
+            bn256::{Fq, Fq2},
+            group::ff::PrimeField,
+        },
     };
-    use halo2_ecc::fields::{fp::FpChip, FieldChip};
+    use halo2_ecc::fields::{fp::FpChip, fp2::Fp2Chip, FieldChip};
 
     #[derive(Deserialize, Debug)]
     struct HashCheck {}
@@ -603,8 +606,8 @@ mod hashing {
     fn build_circuit(
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
-        val: Fq,
-    ) {
+        fq2_val: Fq2,
+    ) -> Fr {
         let mut ctx = builder.main(0);
 
         // Setup the chip
@@ -615,23 +618,83 @@ mod hashing {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
+        let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
 
-        let fq = fp_chip.load_private_reduced(&mut ctx, val);
-        let fq_hash = hash_fq(&mut ctx, &fp_chip, &fq);
+        let fq2 = fp2_chip.load_private_reduced(&mut ctx, fq2_val);
 
-        let fq_hash_val = fq_hash.value();
-        println!("fq: {fq:?}");
-        println!("fq_hash: {fq_hash_val:?}");
+        let mut hasher = Hasher::new(&mut ctx, &fp_chip);
+        hasher.absorb(&fq2);
+        let hash = hasher.squeeze(&mut ctx);
+
+        let hash_val = hash.value();
+        println!("fq2_val: {fq2:?}");
+        println!("hash: {hash_val:?}");
+
+        hash_val.clone()
     }
 
     #[test]
-    fn test_mock() {
-        run_circuit_mock_test(
-            "src/tests/configs/hashing.config",
-            |ctx, basic_config, _test_config: &HashCheck| {
-                build_circuit(ctx, basic_config, Fq::one());
-                build_circuit(ctx, basic_config, Fq::from(2));
-            },
-        );
+    fn test_hash_fq2_mock() {
+        // Elements which introduce a change in every limb, to check
+        // the hasher produces different results.
+        let fq_repr: Vec<[u8; 32]> = vec![
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            [
+                1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,
+            ],
+        ];
+        let fq_values: Vec<Fq> =
+            fq_repr.iter().map(|a| Fq::from_repr(*a).unwrap()).collect();
+
+        // Create values with every fr_value in each component.
+        let values = fq_values
+            .iter()
+            .copied()
+            .map(|x| Fq2 {
+                c0: x,
+                c1: fq_values[0],
+            })
+            .chain(fq_values.iter().copied().map(|y| Fq2 {
+                c0: Fq::from(2), // ensure no repeats
+                c1: y,
+            }));
+
+        // Hash each value
+        let hashed_values: Vec<Fr> = values
+            .map(|v| {
+                run_circuit_mock_test(
+                    "src/tests/configs/hashing.config",
+                    |ctx, basic_config, _test_config: &HashCheck| {
+                        build_circuit(ctx, basic_config, v)
+                    },
+                )
+            })
+            .flatten()
+            .collect();
+
+        // Ensure there are no repeats (indicating a limb/component that does not
+        // contribute to the hash).
+        for i in 0..hashed_values.len() {
+            let v = hashed_values[i];
+            for j in i + 1..hashed_values.len() {
+                assert_ne!(v, hashed_values[j], "i={i}, j={j}");
+            }
+        }
     }
 }
