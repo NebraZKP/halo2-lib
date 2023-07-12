@@ -85,8 +85,10 @@ fn run_circuit_test<
     path: impl AsRef<Path>,
     build_circuit: BC,
 ) {
-    let params_file = File::open(path)
-        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_file = File::open(&path).unwrap_or_else(|e| {
+        let path = path.as_ref().to_str().unwrap();
+        panic!("Path {path} does not exist: {e:?}")
+    });
     let params_reader = BufReader::new(params_file);
     for line in params_reader.lines() {
         let (basic_config, test_config) =
@@ -174,8 +176,10 @@ pub fn run_circuit_mock_test<
     path: impl AsRef<Path>,
     build_circuit: BC,
 ) {
-    let params_file = File::open(path)
-        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_file = File::open(&path).unwrap_or_else(|e| {
+        let path = path.as_ref().to_str().unwrap();
+        panic!("Path {path} does not exist: {e:?}")
+    });
     let params_reader = BufReader::new(params_file);
     for line in params_reader.lines() {
         let (basic_config, test_config) =
@@ -208,8 +212,10 @@ pub fn run_circuit_mock_test_failure<
     path: impl AsRef<Path>,
     build_circuit: BC,
 ) {
-    let params_file = File::open(path)
-        .unwrap_or_else(|e| panic!("Path does not exist: {e:?}"));
+    let params_file = File::open(&path).unwrap_or_else(|e| {
+        let path = path.as_ref().to_str().unwrap();
+        panic!("Path {path} does not exist: {e:?}")
+    });
     let params_reader = BufReader::new(params_file);
     for line in params_reader.lines() {
         let (basic_config, test_config) =
