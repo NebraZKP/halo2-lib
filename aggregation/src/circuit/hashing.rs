@@ -7,6 +7,7 @@ use halo2_base::{
 };
 use halo2_ecc::{
     bigint::ProperCrtUint,
+    ecc::EcPoint,
     fields::{
         fp::{FpChip, Reduced},
         vector::FieldVector,
@@ -61,7 +62,7 @@ impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
     }
 }
 
-/// Hash an in-circuit element of an extention of Fq value.
+/// Absorb an in-circuit element of an extention of Fq value.
 impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
     for FieldVector<Reduced<ProperCrtUint<F>, Fq>>
 {
@@ -69,5 +70,18 @@ impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
         for element in self.0.iter() {
             element.hash(hasher);
         }
+    }
+}
+
+/// Absorb an in-circuit EC point
+impl<
+        F: ScalarField + PrimeField,
+        Fq: FieldExt + Hash,
+        FP: InCircuitHash<F, Fq>,
+    > InCircuitHash<F, Fq> for EcPoint<F, FP>
+{
+    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+        self.x.hash(hasher);
+        self.y.hash(hasher);
     }
 }
