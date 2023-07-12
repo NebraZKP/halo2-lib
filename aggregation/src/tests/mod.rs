@@ -80,11 +80,14 @@ fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
 /// `C` objects read from `path`.
 fn run_circuit_test<
     C: DeserializeOwned + Debug,
-    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C),
+    R,
+    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C) -> R,
 >(
     path: impl AsRef<Path>,
     build_circuit: BC,
-) {
+) -> Vec<R> {
+    let mut out = Vec::<R>::new();
+
     let params_file = File::open(&path).unwrap_or_else(|e| {
         let path = path.as_ref().to_str().unwrap();
         panic!("Path {path} does not exist: {e:?}")
@@ -122,7 +125,7 @@ fn run_circuit_test<
         let proof_time = start_timer!(|| "Proving time");
         let mut builder = GateThreadBuilder::<Fr>::prover();
 
-        build_circuit(&mut builder, &basic_config, &test_config);
+        out.push(build_circuit(&mut builder, &basic_config, &test_config));
 
         let computed_params = builder.config(k as usize, Some(20));
         println!("Computed config: {computed_params:?}");
@@ -164,6 +167,8 @@ fn run_circuit_test<
         .unwrap();
         end_timer!(verify_time);
     }
+
+    out
 }
 
 /// Run `MockProver` on a circuit from a config located at `path`.  Operation
@@ -171,11 +176,14 @@ fn run_circuit_test<
 /// This often gives more informative error messages.
 pub fn run_circuit_mock_test<
     C: DeserializeOwned + Debug,
-    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C),
+    R,
+    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C) -> R,
 >(
     path: impl AsRef<Path>,
     build_circuit: BC,
-) {
+) -> Vec<R> {
+    let mut out = Vec::<R>::new();
+
     let params_file = File::open(&path).unwrap_or_else(|e| {
         let path = path.as_ref().to_str().unwrap();
         panic!("Path {path} does not exist: {e:?}")
@@ -191,7 +199,7 @@ pub fn run_circuit_mock_test<
 
         let mut builder = GateThreadBuilder::<Fr>::mock();
 
-        build_circuit(&mut builder, &basic_config, &test_config);
+        out.push(build_circuit(&mut builder, &basic_config, &test_config));
 
         builder.config(k as usize, Some(10));
         let circuit = RangeCircuitBuilder::mock(builder);
@@ -200,6 +208,8 @@ pub fn run_circuit_mock_test<
             .unwrap()
             .assert_satisfied();
     }
+
+    out
 }
 
 /// Run `MockProver` on a circuit from a config located at `path`.  Operation
