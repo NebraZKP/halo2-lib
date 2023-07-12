@@ -49,7 +49,6 @@ fn g2_from_json(json: &[[String; 2]; 2]) -> G2Affine {
 pub struct JsonVerificationKey {
     pub alpha: [String; 2],
     pub beta: [[String; 2]; 2],
-    pub gamma: [[String; 2]; 2],
     pub delta: [[String; 2]; 2],
     pub s: Vec<[String; 2]>,
 }
@@ -62,7 +61,6 @@ where
 {
     pub alpha: C1,
     pub beta: C2,
-    pub gamma: C2,
     pub delta: C2,
     pub s: Vec<C1>,
 }
@@ -72,7 +70,6 @@ impl From<&JsonVerificationKey> for VerificationKey {
         VerificationKey {
             alpha: g1_from_json(&vk_json.alpha),
             beta: g2_from_json(&vk_json.beta),
-            gamma: g2_from_json(&vk_json.gamma),
             delta: g2_from_json(&vk_json.delta),
             s: vk_json.s.iter().map(g1_from_json).collect(),
         }

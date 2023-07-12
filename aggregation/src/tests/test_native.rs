@@ -66,7 +66,6 @@ fn test_pi_accumulation() {
     let vk = VerificationKey {
         alpha: encode_g1(1),
         beta: encode_g2(1),
-        gamma: encode_g2(1),
         delta: encode_g2(1),
         s: encode_vec(&vec![2, 3, 5]),
     };

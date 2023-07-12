@@ -253,7 +253,7 @@ where
         AssignedPreparedProof {
             ab_pairs: scaled_ab_pairs,
             rp: (minus_rp, g2_chip.assign_point(ctx, vk.beta)),
-            pi: (minus_pi, g2_chip.assign_point(ctx, vk.gamma)),
+            pi: (minus_pi, g2_chip.assign_constant_point(ctx, G2Affine::generator())),
             zc: (minus_zc, g2_chip.assign_point(ctx, vk.delta)),
         }
     }
