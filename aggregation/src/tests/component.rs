@@ -587,3 +587,51 @@ mod pairing_check {
         }
     }
 }
+
+mod hashing {
+    use super::*;
+    use crate::circuit::hash_fq;
+    use halo2_base::{
+        gates::{builder::GateThreadBuilder, RangeChip},
+        halo2_proofs::halo2curves::bn256::Fq,
+    };
+    use halo2_ecc::fields::{fp::FpChip, FieldChip};
+
+    #[derive(Deserialize, Debug)]
+    struct HashCheck {}
+
+    fn build_circuit(
+        builder: &mut GateThreadBuilder<Fr>,
+        basic_config: &BasicConfig,
+        val: Fq,
+    ) {
+        let mut ctx = builder.main(0);
+
+        // Setup the chip
+
+        let range = RangeChip::<Fr>::default(basic_config.lookup_bits);
+        let fp_chip = FpChip::<Fr, Fq>::new(
+            &range,
+            basic_config.limb_bits,
+            basic_config.num_limbs,
+        );
+
+        let fq = fp_chip.load_private_reduced(&mut ctx, val);
+        let fq_hash = hash_fq(&mut ctx, &fp_chip, &fq);
+
+        let fq_hash_val = fq_hash.value();
+        println!("fq: {fq:?}");
+        println!("fq_hash: {fq_hash_val:?}");
+    }
+
+    #[test]
+    fn test_mock() {
+        run_circuit_mock_test(
+            "src/tests/configs/hashing.config",
+            |ctx, basic_config, _test_config: &HashCheck| {
+                build_circuit(ctx, basic_config, Fq::one());
+                build_circuit(ctx, basic_config, Fq::from(2));
+            },
+        );
+    }
+}
