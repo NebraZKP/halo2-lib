@@ -5,7 +5,7 @@ use halo2_base::{
     utils::ScalarField,
     AssignedValue, Context,
 };
-use halo2_ecc::fields::{fp::FpChip, FieldChip, PrimeFieldChip};
+use halo2_ecc::fields::{fp::FpChip, FieldChip};
 use poseidon::PoseidonChip;
 
 // TODO: determine the correct values for these Poseidon constants.
@@ -16,11 +16,7 @@ const R_P: usize = 57;
 /// used, since it is the unique representation.  This creates a poseidon
 /// sponge, absorbing each limb of the unique representation, and then
 /// squeezing.
-pub fn hash_fq<
-    F: ScalarField + PrimeField,
-    Fq: FieldExt + Hash,
-    // FC: FieldChip<F> + PrimeFieldChip<F>,
->(
+pub fn hash_fq<F: ScalarField + PrimeField, Fq: FieldExt + Hash>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<F, Fq>,
     fp: &<FpChip<F, Fq> as FieldChip<F>>::ReducedFieldPoint,
