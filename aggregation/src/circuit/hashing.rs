@@ -16,6 +16,8 @@ use halo2_ecc::{
 };
 use poseidon::PoseidonChip;
 
+use super::{AssignedVerificationKey, G1InputPoint, G2InputPoint};
+
 // TODO: determine the correct values for these Poseidon constants.
 const R_F: usize = 8;
 const R_P: usize = 57;
@@ -83,5 +85,22 @@ impl<
     fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
         self.x.hash(hasher);
         self.y.hash(hasher);
+    }
+}
+
+/// Absorb an in-circuit EC point.
+impl<'a, F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
+    for AssignedVerificationKey<'a, F>
+where
+    G1InputPoint<'a, F>: InCircuitHash<F, Fq>,
+    G2InputPoint<'a, F>: InCircuitHash<F, Fq>,
+{
+    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+        self.alpha.hash(hasher);
+        self.beta.hash(hasher);
+        self.delta.hash(hasher);
+        for s in self.s.iter() {
+            s.hash(hasher);
+        }
     }
 }

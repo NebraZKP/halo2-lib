@@ -1,3 +1,4 @@
+use super::{FromReduced, Hasher};
 use crate::native::{Proof, PublicInputs, VerificationKey};
 use halo2_base::{
     gates::{builder::GateThreadBuilder, GateChip},
@@ -10,9 +11,15 @@ use halo2_base::{
     AssignedValue, Context,
 };
 use halo2_ecc::{
+    bigint::ProperCrtUint,
     bn254::{pairing::PairingChip, Fp12Chip, FqPoint},
     ecc::{scalar_multiply, EcPoint, EccChip},
-    fields::{fp::FpChip, fp2::Fp2Chip, vector::FieldVector, FieldChip},
+    fields::{
+        fp::{FpChip, Reduced},
+        fp2::Fp2Chip,
+        vector::FieldVector,
+        FieldChip,
+    },
 };
 use poseidon::PoseidonChip;
 use std::iter::once;
@@ -37,20 +44,30 @@ pub type G1Point<'a, F> =
 pub type G2Point<'a, F> =
     EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>;
 
-// In-circuit Verification Key
+/// Assigned G1 and G2 points where we want a unique representation, e.g. for
+/// proof elements, where the protocol should not introduce maleability of the
+/// incoming proofs.
+pub type G1InputPoint<'a, F> =
+    EcPoint<F, <FpChip<'a, F, Fq> as FieldChip<F>>::ReducedFieldPoint>;
+pub type G2InputPoint<'a, F> = EcPoint<
+    F,
+    FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::ReducedFieldPoint>,
+>;
+
+/// In-circuit Groth16 Verification Key
 pub struct AssignedVerificationKey<'a, F: PrimeField + ScalarField> {
-    pub alpha: G1Point<'a, F>,
-    pub beta: G2Point<'a, F>,
-    pub delta: G2Point<'a, F>,
-    pub s: Vec<G1Point<'a, F>>,
+    pub alpha: G1InputPoint<'a, F>,
+    pub beta: G2InputPoint<'a, F>,
+    pub delta: G2InputPoint<'a, F>,
+    pub s: Vec<G1InputPoint<'a, F>>,
 }
 
 /// In-circuit Groth16 proof
 #[derive(Clone, Debug)]
 pub struct AssignedProof<'a, F: PrimeField + ScalarField> {
-    pub a: G1Point<'a, F>,
-    pub b: G2Point<'a, F>,
-    pub c: G1Point<'a, F>,
+    pub a: G1InputPoint<'a, F>,
+    pub b: G2InputPoint<'a, F>,
+    pub c: G1InputPoint<'a, F>,
 }
 
 /// In-circuit public inputs
@@ -111,18 +128,15 @@ where
         ctx: &mut Context<F>,
         vk: &VerificationKey,
     ) -> AssignedVerificationKey<F> {
-        let g1_chip = EccChip::new(self.fp_chip);
-        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
-        let g2_chip = EccChip::new(&fp2_chip);
         AssignedVerificationKey {
-            alpha: g1_chip.assign_point(ctx, vk.alpha),
-            beta: g2_chip.assign_point(ctx, vk.beta),
-            delta: g2_chip.assign_point(ctx, vk.delta),
+            alpha: self.assign_g1_reduced(ctx, vk.alpha),
+            beta: self.assign_g2_reduced(ctx, vk.beta),
+            delta: self.assign_g2_reduced(ctx, vk.delta),
             s: vk
                 .s
                 .iter()
                 .copied()
-                .map(|s| g1_chip.assign_point(ctx, s))
+                .map(|s| self.assign_g1_reduced(ctx, s))
                 .collect(),
         }
     }
@@ -141,13 +155,10 @@ where
         ctx: &mut Context<F>,
         proof: &Proof,
     ) -> AssignedProof<F> {
-        let g1_chip = EccChip::new(self.fp_chip);
-        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
-        let g2_chip = EccChip::new(&fp2_chip);
         AssignedProof {
-            a: g1_chip.assign_point(ctx, proof.a),
-            b: g2_chip.assign_point(ctx, proof.b),
-            c: g1_chip.assign_point(ctx, proof.c),
+            a: self.assign_g1_reduced(ctx, proof.a),
+            b: self.assign_g2_reduced(ctx, proof.b),
+            c: self.assign_g1_reduced(ctx, proof.c),
         }
     }
 
@@ -176,13 +187,14 @@ where
 
     /// Execute the top-level batch verification by accumulating (as far as
     /// possible) all proofs and public inputs, and performing a single large
-    /// pairing check.
+    /// pairing check.  Returns the AssignedValue holding the hash of the
+    /// verification key.
     pub fn verify(
         &self,
         builder: &mut GateThreadBuilder<F>,
         vk: &AssignedVerificationKey<F>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
-    ) {
+    ) -> AssignedValue<F> {
         let r = Self::compute_r(builder.main(0), vk, proofs);
         self.verify_with_challenge(builder, vk, proofs, r)
     }
@@ -193,12 +205,66 @@ where
         vk: &AssignedVerificationKey<F>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
-    ) {
+    ) -> AssignedValue<F> {
         assert!(proofs.len() == NUM_PROOFS);
+        let vk_hash = self.compute_vk_hash(builder.main(0), vk);
         let prepared = self.prepare_proofs(builder, vk, (*proofs).clone(), r);
         let ctx = builder.main(0);
         let pairing_out = self.multi_pairing(ctx, &prepared);
         self.check_pairing_result(ctx, &pairing_out);
+        vk_hash
+    }
+
+    pub(crate) fn assign_fq_reduced(
+        self: &Self,
+        ctx: &mut Context<F>,
+        value: Fq,
+    ) -> Reduced<ProperCrtUint<F>, Fq> {
+        let assigned = self.fp_chip.load_private(ctx, value);
+        self.fp_chip.enforce_less_than(ctx, assigned)
+    }
+
+    pub(crate) fn assign_fq2_reduced(
+        self: &Self,
+        ctx: &mut Context<F>,
+        value: Fq2,
+    ) -> FieldVector<Reduced<ProperCrtUint<F>, Fq>> {
+        FieldVector(vec![
+            self.assign_fq_reduced(ctx, value.c0),
+            self.assign_fq_reduced(ctx, value.c1),
+        ])
+    }
+
+    pub(crate) fn assign_g1_reduced(
+        self: &Self,
+        ctx: &mut Context<F>,
+        value: G1Affine,
+    ) -> EcPoint<F, Reduced<ProperCrtUint<F>, Fq>> {
+        EcPoint::new(
+            self.assign_fq_reduced(ctx, value.x),
+            self.assign_fq_reduced(ctx, value.y),
+        )
+    }
+
+    pub(crate) fn assign_g2_reduced(
+        self: &Self,
+        ctx: &mut Context<F>,
+        value: G2Affine,
+    ) -> EcPoint<F, FieldVector<Reduced<ProperCrtUint<F>, Fq>>> {
+        EcPoint::new(
+            self.assign_fq2_reduced(ctx, value.x),
+            self.assign_fq2_reduced(ctx, value.y),
+        )
+    }
+
+    pub(crate) fn compute_vk_hash(
+        self: &Self,
+        ctx: &mut Context<F>,
+        vk: &AssignedVerificationKey<F>,
+    ) -> AssignedValue<F> {
+        let mut hasher = Hasher::<F, Fq>::new(ctx, self.fp_chip);
+        hasher.absorb(vk);
+        hasher.squeeze(ctx)
     }
 
     pub(crate) fn prepare_proofs(
@@ -231,9 +297,11 @@ where
             .map(|scalar| vec![scalar])
             .collect();
 
+        let vk_s: Vec<EcPoint<F, ProperCrtUint<F>>> =
+            Vec::<EcPoint<F, ProperCrtUint<F>>>::from_reduced(&vk.s);
         let pi = ecc_chip.variable_base_msm_in::<G1Affine>(
             builder,
-            &vk.s,
+            vk_s.as_slice(),
             processed_public_inputs,
             F::NUM_BITS as usize,
             WINDOW_BITS,
@@ -241,10 +309,19 @@ where
         );
         let minus_pi = ecc_chip.negate(builder.main(0), pi);
 
-        // Split into Vec<(A,B)>, and Vec<C>
+        // Split into Vec<(A,B)>, and Vec<C>.  Also convert into the
+        // non-reduced versions of the group elements.
         let (ab_pairs, c_points): (Vec<_>, Vec<_>) = proofs
             .into_iter()
-            .map(|proof| ((proof.a, proof.b), proof.c))
+            .map(|proof| {
+                (
+                    (
+                        G1Point::<F>::from_reduced(&proof.a),
+                        G2Point::<F>::from_reduced(&proof.b),
+                    ),
+                    G1Point::<F>::from_reduced(&proof.c),
+                )
+            })
             .unzip();
 
         // Combine C points
@@ -269,7 +346,7 @@ where
         let ctx = builder.main(0);
         let rp = ecc_chip.scalar_mult::<G1Affine>(
             ctx,
-            vk.alpha.clone(),
+            G1Point::<F>::from_reduced(&vk.alpha),
             vec![r_sum],
             F::NUM_BITS as usize,
             WINDOW_BITS,
@@ -281,12 +358,12 @@ where
 
         AssignedPreparedProof {
             ab_pairs: scaled_ab_pairs,
-            rp: (minus_rp, vk.beta.clone()),
+            rp: (minus_rp, G2Point::<F>::from_reduced(&vk.beta)),
             pi: (
                 minus_pi,
                 g2_chip.assign_constant_point(ctx, G2Affine::generator()),
             ),
-            zc: (minus_zc, vk.delta.clone()),
+            zc: (minus_zc, G2Point::<F>::from_reduced(&vk.delta)),
         }
     }
 
