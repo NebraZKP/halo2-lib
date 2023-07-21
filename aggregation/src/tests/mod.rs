@@ -108,7 +108,8 @@ fn run_circuit_test<
 
         build_circuit(&mut builder, &basic_config, &test_config);
 
-        builder.config(k as usize, Some(20));
+        let computed_params = builder.config(k as usize, Some(20));
+        println!("Computed config (keygen): {computed_params:?}");
         let circuit = RangeCircuitBuilder::keygen(builder);
 
         let vk_time = start_timer!(|| "Generating vkey");
@@ -126,9 +127,6 @@ fn run_circuit_test<
         let mut builder = GateThreadBuilder::<Fr>::prover();
 
         out.push(build_circuit(&mut builder, &basic_config, &test_config));
-
-        let computed_params = builder.config(k as usize, Some(20));
-        println!("Computed config: {computed_params:?}");
 
         let circuit = RangeCircuitBuilder::prover(builder, break_points);
         let mut transcript =
@@ -201,7 +199,8 @@ pub fn run_circuit_mock_test<
 
         out.push(build_circuit(&mut builder, &basic_config, &test_config));
 
-        builder.config(k as usize, Some(10));
+        let computed_params = builder.config(k as usize, Some(10));
+        println!("Computed config (keygen): {computed_params:?}");
         let circuit = RangeCircuitBuilder::mock(builder);
 
         MockProver::run(k, &circuit, vec![])
