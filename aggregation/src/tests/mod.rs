@@ -32,6 +32,7 @@ use std::{
 
 // pub mod sample_proof;
 mod component;
+mod recursion;
 mod test_circuit;
 mod test_native;
 

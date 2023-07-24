@@ -13,16 +13,20 @@ use halo2_base::{
     },
     halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},
-        halo2curves::bn256::Fr,
+        halo2curves::bn256::{Bn256, Fr},
         plonk::{Circuit, ConstraintSystem, Error},
+        poly::{commitment::Params, kzg::commitment::ParamsKZG},
     },
 };
 use halo2_ecc::bn254::FpChip;
 use serde::{Deserialize, Serialize};
-use snark_verifier_sdk::CircuitExt;
+use snark_verifier_sdk::{gen_pk, halo2::gen_snark_gwc, CircuitExt, Snark};
 use std::{fs::File, path::Path};
 
 // Modeled on `AggregationCircuit`
+
+// TODO:
+// - Use references to proof and pis
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InnerCircuitConfigParams {
@@ -118,6 +122,7 @@ impl Circuit<Fr> for InnerCircuit {
     }
 }
 
+// TODO: Expose public inputs
 impl CircuitExt<Fr> for InnerCircuit {
     fn num_instance(&self) -> Vec<usize> {
         vec![0]
@@ -126,4 +131,41 @@ impl CircuitExt<Fr> for InnerCircuit {
     fn instances(&self) -> Vec<Vec<Fr>> {
         vec![vec![]]
     }
+}
+
+/// Produce a proof of the inner circuit
+pub fn gen_inner_circuit_snark(
+    params: &ParamsKZG<Bn256>,
+    application_proofs_and_pis: Vec<(Proof, PublicInputs)>,
+    application_vk: &VerificationKey,
+) -> Snark {
+    let inner_circuit = InnerCircuit::new(
+        CircuitBuilderStage::Keygen,
+        None,
+        params.k() as usize - 1,
+        application_vk,
+        application_proofs_and_pis.clone(),
+    );
+    std::env::set_var("LOOKUP_BITS", (params.k() - 1).to_string());
+    let config = inner_circuit
+        .inner
+        .circuit
+        .0
+        .builder
+        .borrow()
+        .config(params.k() as usize, Some(5)); // TODO: Min rows?
+    println!("Inner circuit config: {config:?}");
+
+    let inner_pk = gen_pk(params, &inner_circuit, None);
+    let break_points = inner_circuit.inner.break_points();
+
+    let inner_circuit = InnerCircuit::new(
+        CircuitBuilderStage::Prover,
+        Some(break_points),
+        params.k() as usize - 1,
+        application_vk,
+        application_proofs_and_pis,
+    );
+
+    gen_snark_gwc(params, &inner_pk, inner_circuit, None::<&str>)
 }

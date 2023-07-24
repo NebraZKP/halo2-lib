@@ -14,7 +14,7 @@ use halo2_ecc::bn254::FpChip;
 const PATH: &str = "src/tests/configs/circuit.config";
 
 #[derive(Debug, Deserialize)]
-struct TestConfig {}
+pub struct TestConfig {}
 
 fn batch_verify_circuit(
     builder: &mut GateThreadBuilder<Fr>,
