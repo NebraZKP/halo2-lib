@@ -22,7 +22,8 @@ pub const DEFAULT_NUM_PUBLIC_INPUTS: usize = 3;
 pub const DEFAULT_NUM_PUBLIC_INPUTS_PLUS_ONE: usize =
     DEFAULT_NUM_PUBLIC_INPUTS + 1;
 
-// TODO: determine the correct values for these Poseidon constants.
+// TODO: determine the correct values for these Poseidon constants.  See
+// https://github.com/openzklib/openzl/blob/main/openzl-crypto/src/poseidon/constants.rs.
 const R_F: usize = 8;
 const R_P: usize = 57;
 
