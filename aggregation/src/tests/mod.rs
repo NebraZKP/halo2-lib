@@ -1,6 +1,6 @@
 use ark_std::{end_timer, start_timer};
 use halo2_base::{
-    gates::builder::{GateThreadBuilder, RangeCircuitBuilder},
+    gates::builder::{GateThreadBuilder, RangeWithInstanceCircuitBuilder},
     halo2_proofs::{
         dev::MockProver,
         halo2curves::bn256::{Bn256, Fr, G1Affine, G2Affine, G1, G2},
@@ -19,6 +19,7 @@ use halo2_base::{
         },
     },
     utils::fs::gen_srs,
+    AssignedValue,
 };
 use rand_core::OsRng;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -72,6 +73,18 @@ fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
     (basic_config, test_config)
 }
 
+// /// The form of the build_circuit function for circuit tests.
+// pub trait BuildCircuitFn<C: DeserializeOwned + Debug, R> =
+//     Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C) -> R;
+
+/// The build_circuit function for circuits with instances.
+pub trait BuildCircuitFn<C: DeserializeOwned + Debug, R> = Fn(
+    &mut GateThreadBuilder<Fr>,
+    &BasicConfig,
+    &C,
+    &mut Vec<AssignedValue<Fr>>,
+) -> R;
+
 /// Test key, witness generation and proof generation of a circuit, based on
 /// the configurations in `path`.  The file `path` must contain one or more
 /// lines of JSON specifying a `BasicConfig`, with any extra attributes
@@ -84,7 +97,7 @@ fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
 fn run_circuit_test<
     C: DeserializeOwned + Debug,
     R,
-    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C) -> R,
+    BC: BuildCircuitFn<C, R>,
 >(
     path: impl AsRef<Path>,
     build_circuit: BC,
@@ -109,11 +122,13 @@ fn run_circuit_test<
         // Keygen
         let mut builder = GateThreadBuilder::<Fr>::keygen();
 
-        build_circuit(&mut builder, &basic_config, &test_config);
+        let mut instance = Vec::new();
+        build_circuit(&mut builder, &basic_config, &test_config, &mut instance);
 
         let computed_params = builder.config(k as usize, Some(20));
         println!("Computed config (keygen): {computed_params:?}");
-        let circuit = RangeCircuitBuilder::keygen(builder);
+        let circuit =
+            RangeWithInstanceCircuitBuilder::keygen(builder, instance);
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&kzg_params, &circuit).unwrap();
@@ -122,16 +137,27 @@ fn run_circuit_test<
         let pk = keygen_pk(&kzg_params, vk, &circuit).unwrap();
         end_timer!(pk_time);
 
-        let break_points = circuit.0.break_points.take();
+        let break_points = circuit.circuit.0.break_points.take();
         drop(circuit);
 
         // Create proof
         let proof_time = start_timer!(|| "Proving time");
         let mut builder = GateThreadBuilder::<Fr>::prover();
 
-        out.push(build_circuit(&mut builder, &basic_config, &test_config));
+        let mut instance = Vec::new();
+        out.push(build_circuit(
+            &mut builder,
+            &basic_config,
+            &test_config,
+            &mut instance,
+        ));
 
-        let circuit = RangeCircuitBuilder::prover(builder, break_points);
+        let circuit = RangeWithInstanceCircuitBuilder::prover(
+            builder,
+            instance,
+            break_points,
+        );
+        let instance_vals = circuit.instance();
         let mut transcript =
             Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
@@ -141,7 +167,14 @@ fn run_circuit_test<
             _,
             Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             _,
-        >(&kzg_params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
+        >(
+            &kzg_params,
+            &pk,
+            &[circuit],
+            &[&[&instance_vals]],
+            OsRng,
+            &mut transcript,
+        )
         .unwrap();
         let proof = transcript.finalize();
         end_timer!(proof_time);
@@ -162,7 +195,7 @@ fn run_circuit_test<
             verifier_params,
             pk.get_vk(),
             strategy,
-            &[&[]],
+            &[&[&instance_vals]],
             &mut transcript,
         )
         .unwrap();
@@ -178,7 +211,7 @@ fn run_circuit_test<
 pub fn run_circuit_mock_test<
     C: DeserializeOwned + Debug,
     R,
-    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C) -> R,
+    BC: BuildCircuitFn<C, R>,
 >(
     path: impl AsRef<Path>,
     build_circuit: BC,
@@ -200,13 +233,20 @@ pub fn run_circuit_mock_test<
 
         let mut builder = GateThreadBuilder::<Fr>::mock();
 
-        out.push(build_circuit(&mut builder, &basic_config, &test_config));
+        let mut instance = Vec::new();
+        out.push(build_circuit(
+            &mut builder,
+            &basic_config,
+            &test_config,
+            &mut instance,
+        ));
 
         let computed_params = builder.config(k as usize, Some(20));
         println!("Computed config (keygen): {computed_params:?}");
-        let circuit = RangeCircuitBuilder::mock(builder);
+        let circuit = RangeWithInstanceCircuitBuilder::mock(builder, instance);
+        let instance_vals = circuit.instance();
 
-        MockProver::run(k, &circuit, vec![])
+        MockProver::run(k, &circuit, vec![instance_vals])
             .unwrap()
             .assert_satisfied();
     }
@@ -219,7 +259,8 @@ pub fn run_circuit_mock_test<
 /// This often gives more informative error messages.
 pub fn run_circuit_mock_test_failure<
     C: DeserializeOwned + Debug,
-    BC: Fn(&mut GateThreadBuilder<Fr>, &BasicConfig, &C),
+    R,
+    BC: BuildCircuitFn<C, R>,
 >(
     path: impl AsRef<Path>,
     build_circuit: BC,
@@ -239,12 +280,14 @@ pub fn run_circuit_mock_test_failure<
 
         let mut builder = GateThreadBuilder::<Fr>::mock();
 
-        build_circuit(&mut builder, &basic_config, &test_config);
+        let mut instance = Vec::new();
+        build_circuit(&mut builder, &basic_config, &test_config, &mut instance);
 
         builder.config(k as usize, Some(20));
-        let circuit = RangeCircuitBuilder::mock(builder);
+        let circuit = RangeWithInstanceCircuitBuilder::mock(builder, instance);
+        let instance_vals = circuit.instance();
 
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(k, &circuit, vec![instance_vals]).unwrap();
         let res = prover.verify();
         match res {
             Ok(_) => {

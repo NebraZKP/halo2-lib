@@ -2,6 +2,7 @@ use super::{run_circuit_mock_test, run_circuit_test, BasicConfig};
 use halo2_base::{
     gates::builder::GateThreadBuilder,
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine},
+    AssignedValue,
 };
 use rand_core::OsRng;
 use serde::Deserialize;
@@ -27,6 +28,7 @@ pub mod compute_r {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &ComputeR,
+        _instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         let range = RangeChip::<Fr>::default(basic_config.lookup_bits);
         let fp_chip = FpChip::<Fr, Fq>::new(
@@ -132,6 +134,7 @@ pub mod scalar_powers {
         builder: &mut GateThreadBuilder<Fr>,
         _basic_config: &BasicConfig,
         test_config: &ScalarPowerCircuit,
+        _instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         let ctx = builder.main(0);
 
@@ -189,6 +192,7 @@ pub mod scale_pairs {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         test_config: &ScalePairsCircuit,
+        _instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         let range = RangeChip::<Fr>::default(basic_config.lookup_bits);
         let fp_chip = FpChip::<_, Fq>::new(
@@ -288,6 +292,7 @@ pub mod fp_mul {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &FpMulCircuit,
+        _instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         std::env::set_var("LOOKUP_BITS", basic_config.lookup_bits.to_string());
 
@@ -435,6 +440,7 @@ mod multi_pairing {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         config: &MultiPairing,
+        _instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         // Load native vk and proof
 
@@ -512,6 +518,7 @@ mod pairing_check {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &PairingCheck,
+        _instance: &mut Vec<AssignedValue<Fr>>,
         output_value: Fq12,
     ) {
         let ctx = builder.main(0);
@@ -536,10 +543,23 @@ mod pairing_check {
     #[ignore = "takes too long"]
     #[test]
     fn test() {
+        // TODO: Adding type annotations to the closure fixes a compiler error
+        // related to this issue:
+        //
+        //   https://github.com/rust-lang/rust/issues/37464
         run_circuit_test(
             "src/tests/configs/pairing_check.config",
-            |ctx, basic_config, test_config| {
-                build_circuit(ctx, basic_config, test_config, Fq12::one())
+            |ctx: &mut GateThreadBuilder<Fr>,
+             basic_config: &BasicConfig,
+             test_config: &PairingCheck,
+             instance: &mut Vec<AssignedValue<Fr>>| {
+                build_circuit(
+                    ctx,
+                    basic_config,
+                    test_config,
+                    instance,
+                    Fq12::one(),
+                )
             },
         );
     }
@@ -548,8 +568,17 @@ mod pairing_check {
     fn mock_test() {
         run_circuit_mock_test(
             "src/tests/configs/pairing_check.config",
-            |ctx, basic_config, test_config| {
-                build_circuit(ctx, basic_config, test_config, Fq12::one())
+            |ctx: &mut GateThreadBuilder<Fr>,
+             basic_config: &BasicConfig,
+             test_config: &PairingCheck,
+             instance: &mut Vec<AssignedValue<Fr>>| {
+                build_circuit(
+                    ctx,
+                    basic_config,
+                    test_config,
+                    instance,
+                    Fq12::one(),
+                )
             },
         );
     }
@@ -581,8 +610,17 @@ mod pairing_check {
         for val in fp12_not_ones.iter() {
             run_circuit_mock_test_failure(
                 "src/tests/configs/pairing_check.config",
-                |ctx, basic_config, test_config| {
-                    build_circuit(ctx, basic_config, test_config, *val)
+                |ctx: &mut GateThreadBuilder<Fr>,
+                 basic_config: &BasicConfig,
+                 test_config: &PairingCheck,
+                 instance: &mut Vec<AssignedValue<Fr>>| {
+                    build_circuit(
+                        ctx,
+                        basic_config,
+                        test_config,
+                        instance,
+                        *val,
+                    )
                 },
             );
         }
@@ -681,7 +719,10 @@ mod hashing {
             .flat_map(|v| {
                 run_circuit_mock_test(
                     "src/tests/configs/hashing.config",
-                    |ctx, basic_config, _test_config: &HashCheck| {
+                    |ctx: &mut GateThreadBuilder<Fr>,
+                     basic_config: &BasicConfig,
+                     _test_config: &HashCheck,
+                     _instance: &mut Vec<AssignedValue<Fr>>| {
                         build_circuit(ctx, basic_config, v)
                     },
                 )

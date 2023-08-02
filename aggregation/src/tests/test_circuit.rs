@@ -51,6 +51,7 @@ fn aggregation_circuit(
     builder: &mut GateThreadBuilder<Fr>,
     config: &BasicConfig,
     _test_config: &TestConfig,
+    _instance: &mut Vec<AssignedValue<Fr>>,
 ) {
     // Read the vk
     let vk = load_vk(VK_FILE);
