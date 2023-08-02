@@ -26,6 +26,9 @@ fn batch_verify_circuit(
     let fp_chip = FpChip::<Fr>::new(&range, config.limb_bits, config.num_limbs);
     let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
 
+    let assigned_vk =
+        batch_verifier.assign_verification_key(builder.main(0), vk);
+
     // Assign proofs / instances as witnesses in `ctx`
     let assigned_proofs_and_inputs: Vec<(
         AssignedProof<Fr>,
@@ -41,7 +44,7 @@ fn batch_verify_circuit(
         .collect();
 
     // Call `BatchVerifier::verify`
-    batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs);
+    batch_verifier.verify(builder, &assigned_vk, &assigned_proofs_and_inputs);
 }
 
 fn aggregation_circuit(

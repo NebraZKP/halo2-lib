@@ -44,6 +44,7 @@ pub mod compute_r {
             PublicInputs(vec![Fr::from(1), Fr::from(1), Fr::from(1)]),
             PublicInputs(vec![Fr::from(1), Fr::from(1), Fr::from(2)]),
         ];
+        let a_vk = batch_verifier.assign_verification_key(ctx, &vk);
 
         let a_proof1 = batch_verifier.assign_proof(ctx, &proof1);
         let a_pi: Vec<AssignedPublicInputs<Fr>> = fake_pi
@@ -57,7 +58,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[0].clone()),
             ];
-            let r_1 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_1);
+            let r_1 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_1);
             let r_1_val = *r_1.value();
             println!("r_1_val: {r_1_val:?}");
             r_1_val
@@ -69,7 +70,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
-            let r_2 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_2);
+            let r_2 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_2);
             let r_2_val = *r_2.value();
             println!("r_2_val: {r_2_val:?}");
             r_2_val
@@ -91,7 +92,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
-            let r_3 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_3);
+            let r_3 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_3);
             let r_3_val = *r_3.value();
             println!("r_3_val: {r_3_val:?}");
             r_3_val

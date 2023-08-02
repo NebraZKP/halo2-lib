@@ -37,6 +37,14 @@ pub type G1Point<'a, F> =
 pub type G2Point<'a, F> =
     EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>;
 
+// In-circuit Verification Key
+pub struct AssignedVerificationKey<'a, F: PrimeField + ScalarField> {
+    pub alpha: G1Point<'a, F>,
+    pub beta: G2Point<'a, F>,
+    pub delta: G2Point<'a, F>,
+    pub s: Vec<G1Point<'a, F>>,
+}
+
 /// In-circuit Groth16 proof
 #[derive(Clone, Debug)]
 pub struct AssignedProof<'a, F: PrimeField + ScalarField> {
@@ -98,6 +106,27 @@ where
         self.fp_chip
     }
 
+    pub fn assign_verification_key(
+        self: &Self,
+        ctx: &mut Context<F>,
+        vk: &VerificationKey,
+    ) -> AssignedVerificationKey<F> {
+        let g1_chip = EccChip::new(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
+        AssignedVerificationKey {
+            alpha: g1_chip.assign_point(ctx, vk.alpha),
+            beta: g2_chip.assign_point(ctx, vk.beta),
+            delta: g2_chip.assign_point(ctx, vk.delta),
+            s: vk
+                .s
+                .iter()
+                .copied()
+                .map(|s| g1_chip.assign_point(ctx, s))
+                .collect(),
+        }
+    }
+
     pub fn assign_public_inputs(
         &self,
         ctx: &mut Context<F>,
@@ -124,7 +153,7 @@ where
 
     pub fn compute_r(
         ctx: &mut Context<F>,
-        _vk: &VerificationKey<G1Affine, G2Affine>,
+        _vk: &AssignedVerificationKey<F>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
     ) -> AssignedValue<F> {
         assert!(NUM_PUBLIC_INPUTS_PLUS_ONE == NUM_PUBLIC_INPUTS + 1);
@@ -151,7 +180,7 @@ where
     pub fn verify(
         &self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine>,
+        vk: &AssignedVerificationKey<F>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
     ) {
         let r = Self::compute_r(builder.main(0), vk, proofs);
@@ -161,7 +190,7 @@ where
     pub(crate) fn verify_with_challenge(
         &self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine>,
+        vk: &AssignedVerificationKey<F>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
@@ -175,7 +204,7 @@ where
     pub(crate) fn prepare_proofs(
         &self,
         builder: &mut GateThreadBuilder<F>,
-        vk: &VerificationKey<G1Affine, G2Affine>,
+        vk: &AssignedVerificationKey<F>,
         proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) -> AssignedPreparedProof<F> {
@@ -202,7 +231,7 @@ where
             .map(|scalar| vec![scalar])
             .collect();
 
-        let pi = ecc_chip.fixed_base_msm_in(
+        let pi = ecc_chip.variable_base_msm_in::<G1Affine>(
             builder,
             &vk.s,
             processed_public_inputs,
@@ -238,9 +267,9 @@ where
 
         // Compute - r_sum * P
         let ctx = builder.main(0);
-        let rp = ecc_chip.fixed_base_scalar_mult(
+        let rp = ecc_chip.scalar_mult::<G1Affine>(
             ctx,
-            &vk.alpha,
+            vk.alpha.clone(),
             vec![r_sum],
             F::NUM_BITS as usize,
             WINDOW_BITS,
@@ -252,9 +281,12 @@ where
 
         AssignedPreparedProof {
             ab_pairs: scaled_ab_pairs,
-            rp: (minus_rp, g2_chip.assign_point(ctx, vk.beta)),
-            pi: (minus_pi, g2_chip.assign_constant_point(ctx, G2Affine::generator())),
-            zc: (minus_zc, g2_chip.assign_point(ctx, vk.delta)),
+            rp: (minus_rp, vk.beta.clone()),
+            pi: (
+                minus_pi,
+                g2_chip.assign_constant_point(ctx, G2Affine::generator()),
+            ),
+            zc: (minus_zc, vk.delta.clone()),
         }
     }
 
