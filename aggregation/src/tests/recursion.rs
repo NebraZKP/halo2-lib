@@ -20,7 +20,10 @@ use snark_verifier_sdk::{
     halo2::{aggregation::AggregationCircuit, gen_proof},
     CircuitExt, GWC,
 };
-use std::fs::File;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+};
 
 #[test]
 fn inner_circuit() {
@@ -63,15 +66,26 @@ fn inner_circuit() {
 fn outer_circuit() {
     const INNER_PATH: &str = "src/tests/configs/inner_circuit.config";
     const OUTER_PATH: &str = "src/tests/configs/outer_circuit.config";
-    let inner_config: BasicConfig = serde_json::from_reader(
-        File::open(INNER_PATH).expect("path does not exist"),
-    )
-    .unwrap();
-    let outer_config: BasicConfig = serde_json::from_reader(
-        File::open(OUTER_PATH).expect("path does not exist"),
-    )
-    .unwrap();
+    for inner_config_str in
+        BufReader::new(File::open(INNER_PATH).unwrap()).lines()
+    {
+        let inner_config = inner_config_str.unwrap().clone();
+        for outer_config_str in
+            BufReader::new(File::open(OUTER_PATH).unwrap()).lines()
+        {
+            single_outer_circuit(
+                inner_config.clone(),
+                outer_config_str.unwrap(),
+            );
+        }
+    }
+}
 
+fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
+    let inner_config: BasicConfig =
+        serde_json::from_str(inner_config_str.as_ref()).unwrap();
+    let outer_config: BasicConfig =
+        serde_json::from_str(outer_config_str.as_ref()).unwrap();
     // Read the vk
     let application_vk = load_vk(VK_FILE);
     // Read the proofs
