@@ -153,6 +153,16 @@ where
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
+    ) {
+        let r = Self::compute_r(builder.main(0), vk, proofs);
+        self.verify_with_challenge(builder, vk, proofs, r)
+    }
+
+    pub(crate) fn verify_with_challenge(
+        self: &Self,
+        builder: &mut GateThreadBuilder<F>,
+        vk: &VerificationKey<G1Affine, G2Affine>,
+        proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
         r: AssignedValue<F>,
     ) {
         assert!(proofs.len() == NUM_PROOFS);

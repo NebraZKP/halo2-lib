@@ -40,15 +40,8 @@ fn batch_verify_circuit(
         })
         .collect();
 
-    // Compute the coefficient r
-    let r = BatchVerifier::<_>::compute_r(
-        builder.main(0),
-        vk,
-        &assigned_proofs_and_inputs,
-    );
-
-    // Call `batch_verify`
-    batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs, r);
+    // Call `BatchVerifier::verify`
+    batch_verifier.verify(builder, vk, &assigned_proofs_and_inputs);
 }
 
 fn aggregation_circuit(
