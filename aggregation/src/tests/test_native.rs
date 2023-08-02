@@ -220,7 +220,7 @@ fn test_compute_r_i_A_i_B_i() {
     ];
 
     let r_i_A_i_B_i = compute_r_i_A_i_B_i(
-        &proofs_and_inputs
+        proofs_and_inputs
             .iter()
             .map(|(a, b)| (a, b))
             .collect::<Vec<_>>()

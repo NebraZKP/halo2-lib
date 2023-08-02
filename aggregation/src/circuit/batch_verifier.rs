@@ -124,7 +124,7 @@ where
     }
 
     pub fn assign_verification_key(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         vk: &VerificationKey,
     ) -> AssignedVerificationKey<F> {
@@ -216,7 +216,7 @@ where
     }
 
     pub(crate) fn assign_fq_reduced(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         value: Fq,
     ) -> Reduced<ProperCrtUint<F>, Fq> {
@@ -225,7 +225,7 @@ where
     }
 
     pub(crate) fn assign_fq2_reduced(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         value: Fq2,
     ) -> FieldVector<Reduced<ProperCrtUint<F>, Fq>> {
@@ -236,7 +236,7 @@ where
     }
 
     pub(crate) fn assign_g1_reduced(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         value: G1Affine,
     ) -> EcPoint<F, Reduced<ProperCrtUint<F>, Fq>> {
@@ -247,7 +247,7 @@ where
     }
 
     pub(crate) fn assign_g2_reduced(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         value: G2Affine,
     ) -> EcPoint<F, FieldVector<Reduced<ProperCrtUint<F>, Fq>>> {
@@ -258,7 +258,7 @@ where
     }
 
     pub(crate) fn compute_vk_hash(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         vk: &AssignedVerificationKey<F>,
     ) -> AssignedValue<F> {

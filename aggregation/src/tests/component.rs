@@ -609,7 +609,7 @@ mod hashing {
         basic_config: &BasicConfig,
         fq2_val: Fq2,
     ) -> Fr {
-        let mut ctx = builder.main(0);
+        let ctx = builder.main(0);
 
         // Setup the chip
 
@@ -621,17 +621,17 @@ mod hashing {
         );
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
 
-        let fq2 = fp2_chip.load_private_reduced(&mut ctx, fq2_val);
+        let fq2 = fp2_chip.load_private_reduced(ctx, fq2_val);
 
-        let mut hasher = Hasher::new(&mut ctx, &fp_chip);
+        let mut hasher = Hasher::new(ctx, &fp_chip);
         hasher.absorb(&fq2);
-        let hash = hasher.squeeze(&mut ctx);
+        let hash = hasher.squeeze(ctx);
 
         let hash_val = hash.value();
         println!("fq2_val: {fq2:?}");
         println!("hash: {hash_val:?}");
 
-        hash_val.clone()
+        *hash_val
     }
 
     #[test]

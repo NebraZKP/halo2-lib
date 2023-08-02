@@ -37,18 +37,18 @@ impl<'a, F: ScalarField + PrimeField, Fq: FieldExt + Hash> Hasher<'a, F, Fq> {
         }
     }
 
-    pub fn absorb<T: InCircuitHash<F, Fq>>(self: &mut Self, assigned: &T) {
+    pub fn absorb<T: InCircuitHash<F, Fq>>(&mut self, assigned: &T) {
         assigned.hash(self);
     }
 
-    pub fn squeeze(self: &mut Self, ctx: &mut Context<F>) -> AssignedValue<F> {
+    pub fn squeeze(&mut self, ctx: &mut Context<F>) -> AssignedValue<F> {
         self.poseidon.squeeze(ctx, self.fp_chip.gate()).unwrap()
     }
 }
 
 /// An object which can be absorbed by a Hasher
 pub trait InCircuitHash<F: ScalarField + PrimeField, Fq: FieldExt + Hash> {
-    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>);
+    fn hash(&self, hasher: &mut Hasher<F, Fq>);
 }
 
 /// Absorbe an in-circuit Fq element (FpChip::ReducedFieldPoint).  This must
@@ -57,7 +57,7 @@ pub trait InCircuitHash<F: ScalarField + PrimeField, Fq: FieldExt + Hash> {
 impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
     for Reduced<ProperCrtUint<F>, Fq>
 {
-    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+    fn hash(&self, hasher: &mut Hasher<F, Fq>) {
         hasher
             .poseidon
             .update(self.inner().as_ref().truncation.limbs.as_slice());
@@ -68,7 +68,7 @@ impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
 impl<F: ScalarField + PrimeField, Fq: FieldExt + Hash> InCircuitHash<F, Fq>
     for FieldVector<Reduced<ProperCrtUint<F>, Fq>>
 {
-    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+    fn hash(&self, hasher: &mut Hasher<F, Fq>) {
         for element in self.0.iter() {
             element.hash(hasher);
         }
@@ -82,7 +82,7 @@ impl<
         FP: InCircuitHash<F, Fq>,
     > InCircuitHash<F, Fq> for EcPoint<F, FP>
 {
-    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+    fn hash(&self, hasher: &mut Hasher<F, Fq>) {
         self.x.hash(hasher);
         self.y.hash(hasher);
     }
@@ -95,7 +95,7 @@ where
     G1InputPoint<'a, F>: InCircuitHash<F, Fq>,
     G2InputPoint<'a, F>: InCircuitHash<F, Fq>,
 {
-    fn hash(self: &Self, hasher: &mut Hasher<F, Fq>) {
+    fn hash(&self, hasher: &mut Hasher<F, Fq>) {
         self.alpha.hash(hasher);
         self.beta.hash(hasher);
         self.delta.hash(hasher);
