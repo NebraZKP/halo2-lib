@@ -77,7 +77,10 @@ fn parse_configs<C: DeserializeOwned + Debug>(line: &str) -> (BasicConfig, C) {
 /// lines of JSON specifying a `BasicConfig`, with any extra attributes
 /// required by the test-specific object type `C`.  The function
 /// `build_circuit` is used to contruct a circuit using the `BasicConfig` and
-/// `C` objects read from `path`.
+/// `C` objects read from `path`.  The `build_circuit` function can optionally
+/// return a type R (R = () for functions that do not return anything). The
+/// returned value for each invocation (i.e. for each line in the config file)
+/// is returned from this function.
 fn run_circuit_test<
     C: DeserializeOwned + Debug,
     R,
