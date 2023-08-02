@@ -12,7 +12,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install rust compiler and tools
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
       - name: Build
         run: cargo build --verbose
       # - name: Run halo2-base tests
@@ -44,6 +50,14 @@ jobs:
       #     cargo test --release -- --nocapture bench_msm
       #     mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
       #     cargo test --release -- --nocapture bench_pairing
+      - name: Run rustfmt
+        working-directory: 'aggregation'
+        run: |
+          cargo fmt --check
+      - name: Run clippy
+        working-directory: 'aggregation'
+        run: |
+          cargo clippy --no-deps
       - name: Run aggregation tests
         working-directory: 'aggregation'
         run: |
