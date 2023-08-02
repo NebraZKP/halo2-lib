@@ -98,6 +98,7 @@ where
     fn hash(&self, hasher: &mut Hasher<F, Fq>) {
         self.alpha.hash(hasher);
         self.beta.hash(hasher);
+        self.gamma.hash(hasher);
         self.delta.hash(hasher);
         for s in self.s.iter() {
             s.hash(hasher);

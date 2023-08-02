@@ -16,7 +16,6 @@ use halo2_ecc::{
     ecc::{scalar_multiply, EcPoint, EccChip},
     fields::{
         fp::{FpChip, Reduced},
-        fp2::Fp2Chip,
         vector::FieldVector,
         FieldChip,
     },
@@ -58,6 +57,7 @@ pub type G2InputPoint<'a, F> = EcPoint<
 pub struct AssignedVerificationKey<'a, F: PrimeField + ScalarField> {
     pub alpha: G1InputPoint<'a, F>,
     pub beta: G2InputPoint<'a, F>,
+    pub gamma: G2InputPoint<'a, F>,
     pub delta: G2InputPoint<'a, F>,
     pub s: Vec<G1InputPoint<'a, F>>,
 }
@@ -131,6 +131,7 @@ where
         AssignedVerificationKey {
             alpha: self.assign_g1_reduced(ctx, vk.alpha),
             beta: self.assign_g2_reduced(ctx, vk.beta),
+            gamma: self.assign_g2_reduced(ctx, vk.gamma),
             delta: self.assign_g2_reduced(ctx, vk.delta),
             s: vk
                 .s
@@ -353,16 +354,10 @@ where
         );
         let minus_rp = ecc_chip.negate(ctx, rp);
         // Load from vk
-        let fp2_chip = Fp2Chip::<F, FpChip<F, Fq>, Fq2>::new(self.fp_chip);
-        let g2_chip = EccChip::new(&fp2_chip);
-
         AssignedPreparedProof {
             ab_pairs: scaled_ab_pairs,
             rp: (minus_rp, G2Point::<F>::from_reduced(&vk.beta)),
-            pi: (
-                minus_pi,
-                g2_chip.assign_constant_point(ctx, G2Affine::generator()),
-            ),
+            pi: (minus_pi, G2Point::<F>::from_reduced(&vk.gamma)),
             zc: (minus_zc, G2Point::<F>::from_reduced(&vk.delta)),
         }
     }
