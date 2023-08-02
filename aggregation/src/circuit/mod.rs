@@ -12,11 +12,11 @@ pub use hashing::*;
 /// Conversion from a reduced (unique) represenation to a regular
 /// representation.
 pub trait FromReduced<R> {
-    fn from_reduced(reduced: &R) -> Self;
+    fn from_reduced(reduced: R) -> Self;
 }
 
 impl<F: ScalarField + PrimeField, Fp: Clone>
-    FromReduced<EcPoint<F, Reduced<ProperCrtUint<F>, Fp>>>
+    FromReduced<&EcPoint<F, Reduced<ProperCrtUint<F>, Fp>>>
     for EcPoint<F, ProperCrtUint<F>>
 {
     fn from_reduced(
@@ -27,7 +27,7 @@ impl<F: ScalarField + PrimeField, Fp: Clone>
 }
 
 impl<F: ScalarField + PrimeField, Fp: Clone>
-    FromReduced<EcPoint<F, FieldVector<Reduced<ProperCrtUint<F>, Fp>>>>
+    FromReduced<&EcPoint<F, FieldVector<Reduced<ProperCrtUint<F>, Fp>>>>
     for EcPoint<F, FieldVector<ProperCrtUint<F>>>
 {
     fn from_reduced(
@@ -40,8 +40,8 @@ impl<F: ScalarField + PrimeField, Fp: Clone>
     }
 }
 
-impl<R, T: FromReduced<R>> FromReduced<Vec<R>> for Vec<T> {
-    fn from_reduced(reduced: &Vec<R>) -> Self {
+impl<'a, R, T: FromReduced<&'a R>> FromReduced<&'a Vec<R>> for Vec<T> {
+    fn from_reduced(reduced: &'a Vec<R>) -> Self {
         reduced.iter().map(T::from_reduced).collect()
     }
 }
