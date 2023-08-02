@@ -128,7 +128,7 @@ fn test_pi_accumulation() {
 
     // Run the full computation and check
 
-    let actual = compute_minus_pi(&s, &inputs, &r_powers, sum_r_powers);
+    let actual = compute_minus_pi(s, &inputs, &r_powers, sum_r_powers);
 
     assert!(expect == actual);
     assert!(expect == computed);
@@ -171,7 +171,11 @@ fn test_compute_ZC() {
     assert!(
         expect
             == compute_minus_ZC(
-                &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
+                proofs_and_inputs
+                    .iter()
+                    .map(|(a, b)| (a, b))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
                 &r_powers
             )
     );
@@ -217,7 +221,11 @@ fn test_compute_r_i_A_i_B_i() {
     ];
 
     let r_i_A_i_B_i = compute_r_i_A_i_B_i(
-        &proofs_and_inputs.iter().map(|(a, b)| (a, b)).collect(),
+        &proofs_and_inputs
+            .iter()
+            .map(|(a, b)| (a, b))
+            .collect::<Vec<_>>()
+            .as_slice(),
         &r_powers,
     );
 

@@ -99,7 +99,7 @@ where
     }
 
     pub fn assign_public_inputs(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         inputs: &PublicInputs<F>,
     ) -> AssignedPublicInputs<F> {
@@ -108,7 +108,7 @@ where
     }
 
     pub fn assign_proof(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         proof: &Proof,
     ) -> AssignedProof<F> {
@@ -149,7 +149,7 @@ where
     /// possible) all proofs and public inputs, and performing a single large
     /// pairing check.
     pub fn verify(
-        self: &Self,
+        &self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
@@ -159,7 +159,7 @@ where
     }
 
     pub(crate) fn verify_with_challenge(
-        self: &Self,
+        &self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: &Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
@@ -173,7 +173,7 @@ where
     }
 
     pub(crate) fn prepare_proofs(
-        self: &Self,
+        &self,
         builder: &mut GateThreadBuilder<F>,
         vk: &VerificationKey<G1Affine, G2Affine>,
         proofs: Vec<(AssignedProof<F>, AssignedPublicInputs<F>)>,
@@ -262,9 +262,9 @@ where
     /// public input for each proof).
     pub(crate) fn compute_f_js(
         ctx: &mut Context<F>,
-        r_powers: &Vec<AssignedValue<F>>,
+        r_powers: &[AssignedValue<F>],
         r_sum: &AssignedValue<F>,
-        public_inputs: &Vec<AssignedPublicInputs<F>>,
+        public_inputs: &[AssignedPublicInputs<F>],
     ) -> Vec<AssignedValue<F>> {
         let gate = GateChip::default();
         let num_pub_in = public_inputs[0].0.len();
@@ -273,14 +273,14 @@ where
         // f_0 = r_sum
         // f_j = \sum_{i=0}^{N-1} r^i pi[i][j]
 
-        let f_js: Vec<AssignedValue<F>> = once(r_sum.clone())
+        let f_js: Vec<AssignedValue<F>> = once(*r_sum)
             .chain((0..num_pub_in).map(|j| {
                 // Iterator over the jth public input of each proof
                 let inputs =
                     public_inputs.iter().map(|pub_in| pub_in.0[j].into());
-                // TODO: clone here is because QuantumCell doesn't implement
-                // From<&AssignedValue<F>>
-                gate.inner_product(ctx, r_powers.clone(), inputs)
+                // TODO: clone (via to_owned) here is because QuantumCell
+                // doesn't implement From<&AssignedValue<F>>
+                gate.inner_product(ctx, r_powers.to_owned(), inputs)
             }))
             .collect();
         assert!(f_js.len() == num_pub_in + 1);
@@ -306,7 +306,7 @@ where
     }
 
     pub(crate) fn multi_pairing<'prep>(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         prepared: &'prep AssignedPreparedProof<'prep, F>,
     ) -> FqPoint<F> {
@@ -325,7 +325,7 @@ where
 
     /// Constrain final_exp_out == 1 in GT
     pub(crate) fn check_pairing_result(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         final_exp_out: &FqPoint<F>,
     ) {
@@ -342,9 +342,9 @@ where
     ) -> Vec<AssignedValue<F>> {
         let gate = GateChip::default();
         let mut result = Vec::with_capacity(len);
-        result.push(ctx.load_constant(F::one()).into());
-        result.push(r.into());
-        let mut current = r.clone();
+        result.push(ctx.load_constant(F::one()));
+        result.push(r);
+        let mut current = r;
         for _ in 2..len {
             current = gate.mul(ctx, current, r);
             result.push(current);
@@ -355,7 +355,7 @@ where
 
     /// Returns `(scalar_i * A_i, B_i)`
     pub(crate) fn scale_pairs(
-        self: &Self,
+        &self,
         ctx: &mut Context<F>,
         scalars: Vec<AssignedValue<F>>,
         pairs: Vec<(G1Point<F>, G2Point<F>)>,

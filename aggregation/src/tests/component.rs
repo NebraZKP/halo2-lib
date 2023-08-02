@@ -36,7 +36,7 @@ pub mod compute_r {
         );
         let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
 
-        let mut ctx = builder.main(0);
+        let ctx = builder.main(0);
 
         let vk = load_vk(VK_FILE);
         let (proof1, _inputs1) = load_proof_and_inputs(PROOF1_FILE);
@@ -48,7 +48,7 @@ pub mod compute_r {
         let a_proof1 = batch_verifier.assign_proof(ctx, &proof1);
         let a_pi: Vec<AssignedPublicInputs<Fr>> = fake_pi
             .iter()
-            .map(|pi| batch_verifier.assign_public_inputs(&mut ctx, pi))
+            .map(|pi| batch_verifier.assign_public_inputs(ctx, pi))
             .collect();
 
         // p_i_1 has inputs: [(1,1,1), (1,1,1)]
@@ -57,8 +57,8 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[0].clone()),
             ];
-            let r_1 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_1);
-            let r_1_val = r_1.value().clone();
+            let r_1 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_1);
+            let r_1_val = *r_1.value();
             println!("r_1_val: {r_1_val:?}");
             r_1_val
         };
@@ -69,8 +69,8 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
-            let r_2 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_2);
-            let r_2_val = r_2.value().clone();
+            let r_2 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_2);
+            let r_2_val = *r_2.value();
             println!("r_2_val: {r_2_val:?}");
             r_2_val
         };
@@ -91,8 +91,8 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
-            let r_3 = BatchVerifier::<_>::compute_r(&mut ctx, &vk, &p_i_3);
-            let r_3_val = r_3.value().clone();
+            let r_3 = BatchVerifier::<_>::compute_r(ctx, &vk, &p_i_3);
+            let r_3_val = *r_3.value();
             println!("r_3_val: {r_3_val:?}");
             r_3_val
         };
@@ -220,10 +220,10 @@ pub mod scale_pairs {
             .map(|((a, b), r)| {
                 (
                     (
-                        g1_chip.assign_point(ctx, a.clone()),
-                        g2_chip.assign_point(ctx, b.clone()),
+                        g1_chip.assign_point(ctx, *a),
+                        g2_chip.assign_point(ctx, *b),
                     ),
-                    ctx.load_witness(r.clone()),
+                    ctx.load_witness(*r),
                 )
             })
             .unzip();
@@ -240,7 +240,7 @@ pub mod scale_pairs {
             .map(|((a, b), r)| {
                 (
                     g1_chip.assign_point(ctx, G1Affine::from(a * r)),
-                    g2_chip.assign_point(ctx, b.clone()),
+                    g2_chip.assign_point(ctx, *b),
                 )
             })
             .collect();
@@ -352,7 +352,7 @@ mod multi_pairing {
         basic_config: &BasicConfig,
         prepared_proof: &PreparedProof,
     ) {
-        let mut ctx = builder.main(0);
+        let ctx = builder.main(0);
 
         // Setup the chip
 
@@ -371,7 +371,7 @@ mod multi_pairing {
         // Natively compute the expected pairing result
 
         let expect = {
-            let pairs_values = get_pairing_pairs(&prepared_proof);
+            let pairs_values = get_pairing_pairs(prepared_proof);
             println!("pairs_values = {pairs_values:?}");
             let pairing_out = pairing(&pairs_values);
             println!("expect pairing_out = {pairing_out:?}");
@@ -404,11 +404,11 @@ mod multi_pairing {
             ab_pairs: prepared_proof
                 .ab_pairs
                 .iter()
-                .map(|x| assign_pair(&mut ctx, &g1_chip, &g2_chip, x))
+                .map(|x| assign_pair(ctx, &g1_chip, &g2_chip, x))
                 .collect(),
-            rp: assign_pair(&mut ctx, &g1_chip, &g2_chip, &prepared_proof.rp),
-            pi: assign_pair(&mut ctx, &g1_chip, &g2_chip, &prepared_proof.pi),
-            zc: assign_pair(&mut ctx, &g1_chip, &g2_chip, &prepared_proof.zc),
+            rp: assign_pair(ctx, &g1_chip, &g2_chip, &prepared_proof.rp),
+            pi: assign_pair(ctx, &g1_chip, &g2_chip, &prepared_proof.pi),
+            zc: assign_pair(ctx, &g1_chip, &g2_chip, &prepared_proof.zc),
         };
 
         // Run the multi-miller loop
@@ -427,7 +427,7 @@ mod multi_pairing {
         println!("actual = {actual:?}");
 
         // Instead of assert!(Gt(actual) == expect);
-        assert_eq!(format!("Gt({:?})", actual), format!("{expect:?}"));
+        assert_eq!(format!("Gt({actual:?})"), format!("{expect:?}"));
     }
 
     fn build_circuit(
@@ -513,7 +513,7 @@ mod pairing_check {
         _test_config: &PairingCheck,
         output_value: Fq12,
     ) {
-        let mut ctx = builder.main(0);
+        let ctx = builder.main(0);
 
         // Setup the chip
 
@@ -528,8 +528,8 @@ mod pairing_check {
         // Test valid and invalid results.
 
         let fp12_chip = Fp12Chip::<Fr>::new(&fp_chip);
-        let pairing_result = fp12_chip.load_private(&mut ctx, output_value);
-        batch_verifier.check_pairing_result(&mut ctx, &pairing_result);
+        let pairing_result = fp12_chip.load_private(ctx, output_value);
+        batch_verifier.check_pairing_result(ctx, &pairing_result);
     }
 
     #[ignore = "takes too long"]

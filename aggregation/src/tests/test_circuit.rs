@@ -56,7 +56,7 @@ fn aggregation_circuit(
     let proofs_and_inputs: Vec<(Proof, PublicInputs)> =
         [PROOF1_FILE, PROOF2_FILE, PROOF3_FILE]
             .iter()
-            .map(|e| load_proof_and_inputs(*e))
+            .map(|e| load_proof_and_inputs(e))
             .collect();
 
     let proofs_and_inputs = vec![

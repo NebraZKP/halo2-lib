@@ -164,12 +164,12 @@ pub(crate) fn prepare_public_inputs(
 ) -> G1Affine {
     let mut pi = G1::from(vk.s[0]);
     for i in 0..inputs.0.len() {
-        pi = pi + (vk.s[i + 1] * inputs.0[i]);
+        pi += vk.s[i + 1] * inputs.0[i];
     }
     G1Affine::from(pi)
 }
 
-pub(crate) fn pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> Gt {
+pub(crate) fn pairing(pairs: &[(&G1Affine, &G2Affine)]) -> Gt {
     // Store the prepared G2 elements, so we can create references to them.
     let prepared_g2: Vec<G2Prepared> =
         pairs.iter().map(|(_, b)| G2Prepared::from(**b)).collect();
@@ -182,7 +182,7 @@ pub(crate) fn pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> Gt {
     miller_out.final_exponentiation()
 }
 
-pub(crate) fn check_pairing(pairs: &Vec<(&G1Affine, &G2Affine)>) -> bool {
+pub(crate) fn check_pairing(pairs: &[(&G1Affine, &G2Affine)]) -> bool {
     let pairing_out = pairing(pairs);
     pairing_out == Gt::identity()
 }
@@ -208,7 +208,7 @@ pub fn verify(
     //     (&-proof.c, &G2Prepared::from_affine(vk.delta)),
     // ])
 
-    check_pairing(&vec![
+    check_pairing(&[
         (&proof.a, &proof.b),
         (&-vk.alpha, &vk.beta),
         (&-pi, &G2Affine::generator()),
@@ -231,7 +231,7 @@ pub(crate) fn compute_r_powers(r: Fr, num_powers: usize) -> Vec<Fr> {
 
 pub(crate) fn compute_f_j(
     inputs: &Vec<&PublicInputs>,
-    r_powers: &Vec<Fr>,
+    r_powers: &[Fr],
     sum_r_powers: &Fr,
     j: usize,
 ) -> Fr {
@@ -251,7 +251,7 @@ pub(crate) fn compute_f_j(
 pub(crate) fn compute_minus_pi(
     s: &Vec<G1Affine>,
     inputs: &Vec<&PublicInputs>,
-    r_powers: &Vec<Fr>,
+    r_powers: &[Fr],
     sum_r_powers: Fr,
 ) -> G1Affine {
     let num_inputs = inputs[0].0.len();
@@ -269,10 +269,11 @@ pub(crate) fn compute_minus_pi(
     //   f_j = \sum_{0}^{n-1} r^i = PI_{i,j-1}
 
     let mut pi = s[0] * compute_f_j(inputs, r_powers, &sum_r_powers, 0);
+    #[allow(clippy::needless_range_loop)] // make start idx clear with for
     for j in 1..num_inputs + 1 {
         let pi_i = s[j] * compute_f_j(inputs, r_powers, &sum_r_powers, j);
 
-        pi = pi + pi_i;
+        pi += pi_i;
     }
 
     G1Affine::from(-pi)
@@ -280,8 +281,8 @@ pub(crate) fn compute_minus_pi(
 
 #[allow(non_snake_case)]
 pub(crate) fn compute_minus_ZC(
-    proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
-    r_powers: &Vec<Fr>,
+    proofs_and_inputs: &[(&Proof, &PublicInputs)],
+    r_powers: &[Fr],
 ) -> G1Affine {
     let z_C: G1 = proofs_and_inputs
         .iter()
@@ -294,8 +295,8 @@ pub(crate) fn compute_minus_ZC(
 
 #[allow(non_snake_case)]
 pub(crate) fn compute_r_i_A_i_B_i(
-    proofs_and_inputs: &Vec<(&Proof, &PublicInputs)>,
-    r_powers: &Vec<Fr>,
+    proofs_and_inputs: &[(&Proof, &PublicInputs)],
+    r_powers: &[Fr],
 ) -> Vec<(G1Affine, G2Affine)> {
     let A_is = proofs_and_inputs.iter().map(|p_i| p_i.0.a);
     let A_i_r_is = A_is
@@ -352,9 +353,9 @@ pub(crate) fn compute_prepared_proof(
     }
 }
 
-pub(crate) fn get_pairing_pairs<'a>(
-    prep_proof: &'a PreparedProof,
-) -> Vec<(&'a G1Affine, &'a G2Affine)> {
+pub(crate) fn get_pairing_pairs(
+    prep_proof: &PreparedProof,
+) -> Vec<(&G1Affine, &G2Affine)> {
     let miller_pairs = prep_proof
         .ab_pairs
         .iter()
