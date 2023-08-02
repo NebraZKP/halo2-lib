@@ -678,7 +678,7 @@ mod hashing {
 
         // Hash each value
         let hashed_values: Vec<Fr> = values
-            .map(|v| {
+            .flat_map(|v| {
                 run_circuit_mock_test(
                     "src/tests/configs/hashing.config",
                     |ctx, basic_config, _test_config: &HashCheck| {
@@ -686,16 +686,13 @@ mod hashing {
                     },
                 )
             })
-            .flatten()
             .collect();
 
         // Ensure there are no repeats (indicating a limb/component that does not
         // contribute to the hash).
         for i in 0..hashed_values.len() {
-            let v = hashed_values[i];
-            for j in i + 1..hashed_values.len() {
-                assert_ne!(v, hashed_values[j], "i={i}, j={j}");
-            }
+            // Ensure that hashed_values[i] not in hashed_values[i+1 ...].
+            assert!(!hashed_values[i + 1..].contains(&hashed_values[i]));
         }
     }
 }
