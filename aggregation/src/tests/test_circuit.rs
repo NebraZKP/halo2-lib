@@ -24,7 +24,7 @@ fn batch_verify_circuit(
 ) {
     let range = RangeChip::<Fr>::default(config.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, config.limb_bits, config.num_limbs);
-    let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+    let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
 
     // Assign proofs / instances as witnesses in `ctx`
     let assigned_proofs_and_inputs: Vec<(

@@ -34,7 +34,7 @@ pub mod compute_r {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
 
         let mut ctx = builder.main(0);
 
@@ -107,8 +107,8 @@ pub mod compute_r {
         run_circuit_mock_test(PATH, build_circuit);
     }
 
+    #[ignore = "takes too long"]
     #[test]
-    #[cfg(feature = "all_tests")]
     fn test() {
         run_circuit_test(PATH, build_circuit);
     }
@@ -195,7 +195,7 @@ pub mod scale_pairs {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -362,7 +362,7 @@ mod multi_pairing {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
         let g1_chip = EccChip::new(&fp_chip);
         let fp2_chip = Fp2Chip::<Fr, FpChip<Fr, Fq>, Fq2>::new(&fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
@@ -523,7 +523,7 @@ mod pairing_check {
             basic_config.limb_bits,
             basic_config.num_limbs,
         );
-        let batch_verifier = BatchVerifier::<_> { fp_chip: &fp_chip };
+        let batch_verifier = BatchVerifier::<_>::new(&fp_chip);
 
         // Test valid and invalid results.
 

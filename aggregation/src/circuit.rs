@@ -69,7 +69,7 @@ pub struct BatchVerifier<
 > where
     F: PrimeField + ScalarField,
 {
-    pub fp_chip: &'a FpChip<'a, F, Fq>,
+    fp_chip: &'a FpChip<'a, F, Fq>,
 }
 
 impl<
@@ -89,6 +89,15 @@ impl<
 where
     F: PrimeField + ScalarField,
 {
+    pub fn new(fp_chip: &'a FpChip<F, Fq>) -> BatchVerifier<'a, F> {
+        assert!(NUM_PUBLIC_INPUTS_PLUS_ONE == NUM_PUBLIC_INPUTS + 1);
+        BatchVerifier { fp_chip }
+    }
+
+    pub fn fp_chip(&self) -> &FpChip<'a, F, Fq> {
+        self.fp_chip
+    }
+
     pub fn assign_public_inputs(
         self: &Self,
         ctx: &mut Context<F>,
