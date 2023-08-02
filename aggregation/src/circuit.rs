@@ -136,13 +136,13 @@ where
             NUM_PUBLIC_INPUTS_PLUS_ONE,
             NUM_PUBLIC_INPUTS,
         >::new(ctx, R_F, R_P)
-        .unwrap();
-        for pi in proofs.iter().map(|p_i| &p_i.1) {
-            poseidon.update(pi.0.as_slice());
+        .expect("create poseidon chip");
+        for pi in proofs {
+            poseidon.update(pi.1 .0.as_slice());
         }
 
         let gate = GateChip::default();
-        poseidon.squeeze(ctx, &gate).unwrap()
+        poseidon.squeeze(ctx, &gate).expect("squeeze")
     }
 
     /// Execute the top-level batch verification by accumulating (as far as
