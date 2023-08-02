@@ -591,7 +591,7 @@ mod pairing_check {
 
 mod hashing {
     use super::*;
-    use crate::circuit::Hasher;
+    use crate::circuit::PoseidonHasher;
     use halo2_base::{
         gates::{builder::GateThreadBuilder, RangeChip},
         halo2_proofs::halo2curves::{
@@ -623,7 +623,7 @@ mod hashing {
 
         let fq2 = fp2_chip.load_private_reduced(ctx, fq2_val);
 
-        let mut hasher = Hasher::new(ctx, &fp_chip);
+        let mut hasher = PoseidonHasher::new(ctx, &fp_chip);
         hasher.absorb(&fq2);
         let hash = hasher.squeeze(ctx);
 

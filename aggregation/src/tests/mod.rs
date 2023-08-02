@@ -202,7 +202,7 @@ pub fn run_circuit_mock_test<
 
         out.push(build_circuit(&mut builder, &basic_config, &test_config));
 
-        let computed_params = builder.config(k as usize, Some(10));
+        let computed_params = builder.config(k as usize, Some(20));
         println!("Computed config (keygen): {computed_params:?}");
         let circuit = RangeCircuitBuilder::mock(builder);
 
@@ -241,7 +241,7 @@ pub fn run_circuit_mock_test_failure<
 
         build_circuit(&mut builder, &basic_config, &test_config);
 
-        builder.config(k as usize, Some(10));
+        builder.config(k as usize, Some(20));
         let circuit = RangeCircuitBuilder::mock(builder);
 
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();

@@ -1,4 +1,4 @@
-use super::{FromReduced, Hasher};
+use super::{FromReduced, PoseidonHasher};
 use crate::native::{Proof, PublicInputs, VerificationKey};
 use halo2_base::{
     gates::{builder::GateThreadBuilder, GateChip},
@@ -44,8 +44,8 @@ pub type G2Point<'a, F> =
     EcPoint<F, FieldVector<<FpChip<'a, F, Fq> as FieldChip<F>>::FieldPoint>>;
 
 /// Assigned G1 and G2 points where we want a unique representation, e.g. for
-/// proof elements, where the protocol should not introduce maleability of the
-/// incoming proofs.
+/// proof elements, where the protocol should not introduce malleability of
+/// the incoming proofs.
 pub type G1InputPoint<'a, F> =
     EcPoint<F, <FpChip<'a, F, Fq> as FieldChip<F>>::ReducedFieldPoint>;
 pub type G2InputPoint<'a, F> = EcPoint<
@@ -263,7 +263,7 @@ where
         ctx: &mut Context<F>,
         vk: &AssignedVerificationKey<F>,
     ) -> AssignedValue<F> {
-        let mut hasher = Hasher::<F, Fq>::new(ctx, self.fp_chip);
+        let mut hasher = PoseidonHasher::<F, Fq>::new(ctx, self.fp_chip);
         hasher.absorb(vk);
         hasher.squeeze(ctx)
     }
