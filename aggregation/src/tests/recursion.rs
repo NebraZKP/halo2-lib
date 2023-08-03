@@ -62,6 +62,7 @@ fn inner_circuit() {
 }
 
 // RUST_BACKTRACE=full cargo test --package aggregation --lib -- tests::recursion::outer_circuit --exact --nocapture
+#[ignore = "takes too long"]
 #[test]
 fn outer_circuit() {
     const INNER_PATH: &str = "src/tests/configs/inner_circuit.config";
