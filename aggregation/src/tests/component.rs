@@ -28,7 +28,7 @@ pub mod compute_r {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &ComputeR,
-        _instance: &mut Vec<AssignedValue<Fr>>,
+        instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         let range = RangeChip::<Fr>::default(basic_config.lookup_bits);
         let fp_chip = FpChip::<Fr, Fq>::new(
@@ -61,6 +61,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[0].clone()),
             ];
             let r_1 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_1);
+            instance.push(r_1);
             let r_1_val = *r_1.value();
             println!("r_1_val: {r_1_val:?}");
             r_1_val
@@ -73,6 +74,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
             let r_2 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_2);
+            instance.push(r_2);
             let r_2_val = *r_2.value();
             println!("r_2_val: {r_2_val:?}");
             r_2_val
@@ -95,6 +97,7 @@ pub mod compute_r {
                 (a_proof1.clone(), a_pi[1].clone()),
             ];
             let r_3 = BatchVerifier::<_>::compute_r(ctx, &a_vk, &p_i_3);
+            instance.push(r_3);
             let r_3_val = *r_3.value();
             println!("r_3_val: {r_3_val:?}");
             r_3_val
@@ -292,9 +295,11 @@ pub mod fp_mul {
         builder: &mut GateThreadBuilder<Fr>,
         basic_config: &BasicConfig,
         _test_config: &FpMulCircuit,
-        _instance: &mut Vec<AssignedValue<Fr>>,
+        instance: &mut Vec<AssignedValue<Fr>>,
     ) {
         std::env::set_var("LOOKUP_BITS", basic_config.lookup_bits.to_string());
+
+        // relation (_ab ; ab, a, b):  _ab = ab mod q, ab = a * b
 
         let ctx = builder.main(0);
 
@@ -308,7 +313,8 @@ pub mod fp_mul {
         );
         let assign_a = fp_chip.load_private(ctx, a);
         let assign_b = fp_chip.load_private(ctx, b);
-        let _ab = fp_chip.mul(ctx, assign_a, assign_b);
+        let ab = fp_chip.mul(ctx, assign_a, assign_b);
+        instance.push(ab.as_ref().native);
     }
 
     const PATH: &str = "src/tests/configs/fp_mul.config";

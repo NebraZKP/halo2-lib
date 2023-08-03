@@ -21,6 +21,7 @@ fn batch_verify_circuit(
     config: &BasicConfig,
     vk: &VerificationKey,
     proofs_and_inputs: &Vec<(Proof, PublicInputs)>,
+    instance: &mut Vec<AssignedValue<Fr>>,
 ) {
     let range = RangeChip::<Fr>::default(config.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, config.limb_bits, config.num_limbs);
@@ -44,14 +45,42 @@ fn batch_verify_circuit(
         .collect();
 
     // Call `BatchVerifier::verify`
-    batch_verifier.verify(builder, &assigned_vk, &assigned_proofs_and_inputs);
+    let vk_hash = batch_verifier.verify(
+        builder,
+        &assigned_vk,
+        &assigned_proofs_and_inputs,
+    );
+
+    // For N proofs each with n public inputs, the public inputs to the inner
+    // circuit are:
+    //
+    //   vk_hash
+    //   PI_1_1  \
+    //   ...      }  inputs to proof 1
+    //   PI_1_n  /
+    //   PI_2_1  \
+    //   ...      }  inputs to proof 2
+    //   PI_2_n  /
+    //   ...
+    //   ...
+    //   ...
+    //   PI_N_1  \
+    //   ...      }  inputs to proof N
+    //   PI_N_n  /
+
+    instance.push(vk_hash);
+    for p_i in assigned_proofs_and_inputs {
+        for i in p_i.1 .0 {
+            instance.push(i);
+        }
+    }
 }
 
 fn aggregation_circuit(
     builder: &mut GateThreadBuilder<Fr>,
     config: &BasicConfig,
     _test_config: &TestConfig,
-    _instance: &mut Vec<AssignedValue<Fr>>,
+    instance: &mut Vec<AssignedValue<Fr>>,
 ) {
     // Read the vk
     let vk = load_vk(VK_FILE);
@@ -74,7 +103,7 @@ fn aggregation_circuit(
         proofs_and_inputs[1].clone(),
     ];
 
-    batch_verify_circuit(builder, config, &vk, &proofs_and_inputs)
+    batch_verify_circuit(builder, config, &vk, &proofs_and_inputs, instance);
 }
 
 #[test]

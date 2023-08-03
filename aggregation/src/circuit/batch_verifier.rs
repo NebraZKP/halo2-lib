@@ -73,7 +73,7 @@ pub struct AssignedProof<'a, F: PrimeField + ScalarField> {
 /// In-circuit public inputs
 #[derive(Clone, Debug)]
 pub struct AssignedPublicInputs<F: PrimeField + ScalarField>(
-    Vec<AssignedValue<F>>,
+    pub Vec<AssignedValue<F>>,
 );
 
 /// In-circuit equivalent of PreparedProof.
