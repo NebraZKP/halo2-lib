@@ -10,7 +10,7 @@ use halo2_base::{
         dev::MockProver,
         poly::{
             commitment::Params,
-            kzg::multiopen::{ProverGWC, VerifierGWC},
+            kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK},
         },
     },
     utils::fs::gen_srs,
@@ -18,7 +18,7 @@ use halo2_base::{
 use snark_verifier_sdk::{
     gen_pk,
     halo2::{aggregation::AggregationCircuit, gen_proof},
-    CircuitExt, GWC,
+    CircuitExt, SHPLONK,
 };
 use std::{
     fs::File,
@@ -118,15 +118,17 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
 
     // Then create aggregation circuit of these `inner_snarks`
     // TODO: Shplonk v GWC ?
-    let outer_circuit =
-        AggregationCircuit::keygen::<GWC>(&outer_params, inner_snarks.clone());
+    let outer_circuit = AggregationCircuit::keygen::<SHPLONK>(
+        &outer_params,
+        inner_snarks.clone(),
+    );
     let pk_timer = start_timer!(|| "Outer Circuit Proving Key Gen");
     let pk = gen_pk(&outer_params, &outer_circuit, None);
     end_timer!(pk_timer);
     let break_points = outer_circuit.break_points();
     drop(outer_circuit);
 
-    let outer_circuit = AggregationCircuit::prover::<GWC>(
+    let outer_circuit = AggregationCircuit::prover::<SHPLONK>(
         &outer_params,
         inner_snarks,
         break_points,
@@ -136,7 +138,7 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
     println!("Outer circuit config: {config:#?}");
     let instances = outer_circuit.instances();
     let outer_timer = start_timer!(|| "Outer Circuit Proving");
-    let _proof = gen_proof::<_, ProverGWC<_>, VerifierGWC<_>>(
+    let _proof = gen_proof::<_, ProverSHPLONK<_>, VerifierSHPLONK<_>>(
         &outer_params,
         &pk,
         outer_circuit,

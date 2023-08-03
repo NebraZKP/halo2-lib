@@ -20,13 +20,8 @@ use halo2_base::{
 };
 use halo2_ecc::bn254::FpChip;
 use serde::{Deserialize, Serialize};
-use snark_verifier_sdk::{gen_pk, halo2::gen_snark_gwc, CircuitExt, Snark};
+use snark_verifier_sdk::{gen_pk, halo2::gen_snark_shplonk, CircuitExt, Snark};
 use std::{fs::File, path::Path};
-
-// Modeled on `AggregationCircuit`
-
-// TODO:
-// - Use references to proof and pis
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InnerCircuitConfigParams {
@@ -133,7 +128,7 @@ impl CircuitExt<Fr> for InnerCircuit {
     }
 }
 
-/// Produce a proof of the inner circuit
+/// Produce a SNARK of the inner circuit
 pub fn gen_inner_circuit_snark(
     params: &ParamsKZG<Bn256>,
     application_proofs_and_pis: Vec<(Proof, PublicInputs)>,
@@ -167,5 +162,5 @@ pub fn gen_inner_circuit_snark(
         application_proofs_and_pis,
     );
 
-    gen_snark_gwc(params, &inner_pk, inner_circuit, None::<&str>)
+    gen_snark_shplonk(params, &inner_pk, inner_circuit, None::<&str>)
 }
