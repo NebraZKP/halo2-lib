@@ -109,7 +109,7 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
     let inner_params = gen_srs(inner_config.degree);
     let outer_params = gen_srs(outer_config.degree);
 
-    let inner_snarks = [(); 3].map(|_| {
+    let inner_snarks = [(); 2].map(|_| {
         gen_inner_circuit_snark(
             &inner_params,
             proofs_and_inputs.clone(),
@@ -127,6 +127,9 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
     let pk = gen_pk(&outer_params, &outer_circuit, None);
     end_timer!(pk_timer);
     let break_points = outer_circuit.break_points();
+    // TODO: Min rows?
+    let config = outer_circuit.config(outer_params.k(), Some(10));
+    println!("Outer circuit config: {config:#?}");
     drop(outer_circuit);
 
     let outer_circuit = AggregationCircuit::prover::<SHPLONK>(
@@ -134,9 +137,7 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
         inner_snarks,
         break_points,
     );
-    // TODO: Min rows?
-    let config = outer_circuit.config(outer_params.k(), Some(10));
-    println!("Outer circuit config: {config:#?}");
+
     let instances = outer_circuit.instances();
     let outer_timer = start_timer!(|| "Outer Circuit Proving");
     let _proof = gen_proof::<_, ProverSHPLONK<_>, VerifierSHPLONK<_>>(
