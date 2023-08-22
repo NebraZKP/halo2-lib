@@ -1,0 +1,256 @@
+
+running 1 test
+basic config: BasicConfig { degree: 17, lookup_bits: 16, limb_bits: 88, num_limbs: 3 }
+test config: TestConfig
+read params from ./params/kzg_bn254_17.srs
+computing length 4 MSM
+computing length 8 MSM
+Gate Chip | Phase 0: 18814309 advice cells , 2653277 lookup advice cells
+Total 817 fixed cells
+Computed config (keygen): FlexGateConfigParams { strategy: Vertical, k: 17, num_advice_per_phase: [144, 0, 0], num_lookup_advice_per_phase: [21, 0, 0], num_fixed: 1 }
+Start:   Generating vkey
+k: 17, extended_k: 19
+End:     Generating vkey ...........................................................14.527s
+Start:   Generating pkey
+End:     Generating pkey ...........................................................20.422s
+Start:   Proving time
+computing length 4 MSM
+computing length 8 MSM
+··Start:   Phase 1: Witness assignment and MSM commitments
+··End:     Phase 1: Witness assignment and MSM commitments .........................3.831s
+··Start:   Phase 2: Lookup commit permuted
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................19.425ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................3.488ms
+····Start:   to_vec
+····End:     to_vec ................................................................806.810µs
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.371ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.257ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................16.824ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................6.262ms
+····Start:   to_vec
+····End:     to_vec ................................................................617.547µs
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................2.655ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................2.239ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................14.859ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.597ms
+····Start:   to_vec
+····End:     to_vec ................................................................402.079µs
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.747ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.367ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.472ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................3.696ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.613ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................2.259ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.583ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................11.198ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.382ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.409ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................2.503ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.168ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.462ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.678ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.414ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.870ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.101ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.407ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.176ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.380ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.740ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.182ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.132ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.775ms
+····Start:   to_vec
+····End:     to_vec ................................................................2.798ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.974ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.648ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................11.381ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.439ms
+····Start:   to_vec
+····End:     to_vec ................................................................2.461ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.871ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.225ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.616ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................1.968ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.394ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................2.573ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.201ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.295ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.541ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.361ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.755ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.325ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.172ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.459ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.346ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.833ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.127ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.670ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.497ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.505ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.848ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.722ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.728ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.376ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.358ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.850ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.120ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................11.635ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.618ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.404ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.942ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.177ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.406ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.188ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.635ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.767ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.452ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.064ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.109ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.373ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.788ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.358ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................12.018ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.263ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.340ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.868ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.308ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.787ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.130ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.352ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.803ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.162ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................13.204ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................2.411ms
+····Start:   to_vec
+····End:     to_vec ................................................................1.393ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.961ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.487ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................3.948ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................1.445ms
+····Start:   to_vec
+····End:     to_vec ................................................................395.744µs
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................1.887ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................1.509ms
+··End:     Phase 2: Lookup commit permuted .........................................1.406s
+··Start:   Phase 3a: Commit to permutations
+··End:     Phase 3a: Commit to permutations ........................................4.650s
+··Start:   Phase 3b: Lookup commit product
+··End:     Phase 3b: Lookup commit product .........................................869.541ms
+··Start:   Commit to vanishing argument's random poly
+··End:     Commit to vanishing argument's random poly ..............................14.814ms
+··Start:   Calculate advice polys (fft)
+··End:     Calculate advice polys (fft) ............................................537.899ms
+··Start:   Phase 4: Evaluate h(X)
+··End:     Phase 4: Evaluate h(X) ..................................................8.645s
+··Start:   Commit to vanishing argument's h(X) commitments
+··End:     Commit to vanishing argument's h(X) commitments .........................55.546ms
+··Start:   Commit to vanishing argument's h(X) commitments
+test tests::test_circuit::test_aggregation_circuit has been running for over 60 seconds
+··End:     Commit to vanishing argument's h(X) commitments .........................831.706ms
+··Start:   Phase 5: multiopen
+··End:     Phase 5: multiopen ......................................................2.214s
+End:     Proving time ..............................................................24.768s
+Start:   Verify time
+End:     Verify time ...............................................................15.160ms
+test tests::test_circuit::test_aggregation_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 62.69s
+

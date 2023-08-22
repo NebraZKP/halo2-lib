@@ -1,0 +1,24 @@
+running 1 test
+basic config: BasicConfig { degree: 17, lookup_bits: 16, limb_bits: 88, num_limbs: 3 }
+test config: TestConfig
+read params from ./params/kzg_bn254_17.srs
+computing length 4 MSM
+computing length 8 MSM
+Gate Chip | Phase 0: 18814309 advice cells , 2653277 lookup advice cells
+Total 817 fixed cells
+Computed config (keygen): FlexGateConfigParams { strategy: Vertical, k: 17, num_advice_per_phase: [144, 0, 0], num_lookup_advice_per_phase: [21, 0, 0], num_fixed: 1 }
+Start:   Generating vkey
+k: 17, extended_k: 19
+End:     Generating vkey ...........................................................45.823s
+Start:   Generating pkey
+test tests::test_circuit::test_aggregation_circuit has been running for over 60 seconds
+End:     Generating pkey ...........................................................24.409s
+Start:   Proving time
+computing length 4 MSM
+computing length 8 MSM
+End:     Proving time ..............................................................69.560s
+Start:   Verify time
+End:     Verify time ...............................................................16.377ms
+test tests::test_circuit::test_aggregation_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 142.75s
