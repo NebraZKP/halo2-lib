@@ -763,7 +763,7 @@ mod transform {
         do_packing: bool,
         f: fn(&u8) -> u8,
         uniform_lookup: bool,
-    ) -> (Vec<Cell<F>>, Vec<PartValue<F>>) {
+    ) -> Vec<Cell<F>> {
         let cells = input
             .iter()
             .map(|input_part| {
@@ -774,7 +774,8 @@ mod transform {
                 }
             })
             .collect_vec();
-        (cells.clone(), transform_to::value(&cells, region, input, do_packing, f))
+        transform_to::value(&cells, region, input, do_packing, f);
+        cells
     }
 }
 
@@ -1249,7 +1250,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         info!("- Post squeeze:");
         info!("Lookups: {}", lookup_counter);
         info!("Columns: {}", cell_manager.get_width());
-        
         total_lookup_counter += lookup_counter;
 
         // The round constraints that we've been building up till now
@@ -1510,6 +1510,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
     }
 
+    /// Assigns the cells in `KeccakRow` to `region`.
     pub fn set_row_with_flags(
         &self,
         region: &mut Region<'_, F>,
@@ -1529,11 +1530,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
         ] {
             assign_fixed_custom(region, *column, offset, *value);
         }
-
         assign_advice_custom(region, self.is_final, offset, Value::known(F::from(row.is_final)));
-
         let mut result = Vec::new();
-
         // Cell values
         row.cell_values.iter().zip(self.cell_manager.columns()).enumerate().for_each(
             |(col_index, (bit, column))| {
@@ -1544,7 +1542,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 }
             },
         );
-
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
         result
@@ -1958,7 +1955,7 @@ pub fn keccak_phase0<F: Field>(
 pub fn keccak_phase0_with_flags<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-    flagged_indices: &mut HashMap<usize, (Vec<usize>, usize)>,
+    flagged_indices: &mut HashMap<usize, (usize, usize)>,
     bytes: &[u8],
 ) {
     let mut bits = into_bits(bytes);
@@ -2226,7 +2223,7 @@ pub fn keccak_phase0_with_flags<F: Field>(
             cell_manager.start_region();
             let packed = split::value(cell_manager, region, *word, 0, 8, false, None);
             cell_manager.start_region();
-            let (transformed_cells, transformed) = transform::value_and_return_cells(
+            let transformed_cells = transform::value_and_return_cells(
                 cell_manager,
                 region,
                 packed,
@@ -2241,11 +2238,9 @@ pub fn keccak_phase0_with_flags<F: Field>(
                     let row_index = (num_chunks - 1) * (NUM_ROUNDS + 1) * num_rows_per_round
                         + round_number * num_rows_per_round
                         + cell_offset;
-                    if let Some((indices, counter)) = flagged_indices.get_mut(&row_index) {
-                        panic!("This shouldn't happen");
-                    } else {
-                        flagged_indices.insert(row_index, (vec![cell_column_idx], counter));
-                    }
+                    if flagged_indices.insert(row_index, (cell_column_idx, counter)).is_some() {
+                        panic!("Row index {row_index:?} already flagged");
+                    };
                     counter += 1;
                 }
             }
