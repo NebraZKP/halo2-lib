@@ -109,7 +109,7 @@ fn single_outer_circuit(inner_config_str: String, outer_config_str: String) {
     let inner_params = gen_srs(inner_config.degree);
     let outer_params = gen_srs(outer_config.degree);
 
-    let inner_snarks = [(); 2].map(|_| {
+    let inner_snarks = [(); 3].map(|_| {
         gen_inner_circuit_snark(
             &inner_params,
             proofs_and_inputs.clone(),
