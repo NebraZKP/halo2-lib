@@ -288,6 +288,10 @@ impl<F: FieldExt> CellManager<F> {
         } else {
             assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
+            // This is the column where the 64-bit words are stored.
+            if advice.index() == 2 {
+                meta.enable_equality(advice);
+            }
             if let Ok(col_to_enable) = var("COL_TO_ENABLE")
                 .map(|s| s.parse::<usize>().expect("Cannot parse COL_TO_ENABLE env var as usize"))
             {
@@ -1956,6 +1960,7 @@ pub fn keccak_phase0_with_flags<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     flagged_indices: &mut HashMap<usize, (usize, usize)>,
+    flagged_words: &mut HashMap<usize, usize>,
     bytes: &[u8],
 ) {
     let mut bits = into_bits(bytes);
@@ -2015,6 +2020,14 @@ pub fn keccak_phase0_with_flags<F: Field>(
             // Absorb data
             let absorb_from = cell_manager.query_cell_value();
             let absorb_data = cell_manager.query_cell_value();
+            if round < NUM_WORDS_TO_ABSORB {
+                let cell_offset = absorb_data.rotation as usize;
+                let cell_column_idx = absorb_data.column_idx;
+                let row_index = idx*(NUM_ROUNDS+1)*num_rows_per_round + round*num_rows_per_round + cell_offset;
+                if flagged_words.insert(row_index, cell_column_idx).is_some() {
+                    panic!("Row index {row_index:?} already flagged");
+                };
+            }
             let absorb_result = cell_manager.query_cell_value();
             absorb_from.assign(&mut region, 0, absorb_row.from);
             absorb_data.assign(&mut region, 0, absorb_row.absorb);
