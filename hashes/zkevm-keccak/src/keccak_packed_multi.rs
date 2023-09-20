@@ -24,9 +24,6 @@ use std::collections::HashMap;
 use std::env::var;
 use std::marker::PhantomData;
 
-#[cfg(test)]
-mod tests;
-
 const MAX_DEGREE: usize = 3;
 const ABSORB_LOOKUP_RANGE: usize = 3;
 const THETA_C_LOOKUP_RANGE: usize = 6;
@@ -1631,8 +1628,16 @@ pub fn keccak_phase0<F: Field>(
     );
 }
 
-/// Witness generation in `FirstPhase` for a keccak hash digest without
-/// computing RLCs, which are deferred to `SecondPhase`.
+/// Fills [`KeccakRow`]s with the trace of the computation of the keccak
+/// hash of `bytes`. Returns:
+/// - `squeeze_digests`: vector of output 8-byte words
+/// - `flagged_indices`: HashMap with the positions of the cells holding
+/// the output bytes. The key is the row index, and the value is a pair
+/// consisting of the column index and the order in which they appear as the keccak output
+/// of a particular query.
+/// - `flagged_words`: HashMap with the positions of the cells holding the
+/// the input 8-byte words. The key is the row index and the value is the column index.
+/// These are already ordered.
 pub fn keccak_phase0_with_flags<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
@@ -1697,9 +1702,13 @@ pub fn keccak_phase0_with_flags<F: Field>(
             // Absorb data
             let absorb_from = cell_manager.query_cell_value();
             let absorb_data = cell_manager.query_cell_value();
+            // The cell above holds a word which will be absorbed. Therefore
+            // we add it to `flagged_words`.
             if round < NUM_WORDS_TO_ABSORB {
                 let cell_offset = absorb_data.rotation as usize;
                 let cell_column_idx = absorb_data.column_idx;
+                // We compute the row index from the cell offset, the current
+                // round and the current chunk
                 let row_index = idx * (NUM_ROUNDS + 1) * num_rows_per_round
                     + round * num_rows_per_round
                     + cell_offset;
@@ -1923,10 +1932,13 @@ pub fn keccak_phase0_with_flags<F: Field>(
                 |v| *v,
                 true,
             );
+            // `transformed_cells` hold the cells which contain the output bytes for each chunk.
+            // Therefore we add them to `flagged_indices`.
             if is_final_block {
                 for cell in transformed_cells {
                     let cell_offset = cell.rotation as usize;
                     let cell_column_idx = cell.column_idx;
+                    // We compute the row index from the round number and the cell offset.
                     let row_index = (num_chunks - 1) * (NUM_ROUNDS + 1) * num_rows_per_round
                         + round_number * num_rows_per_round
                         + cell_offset;
