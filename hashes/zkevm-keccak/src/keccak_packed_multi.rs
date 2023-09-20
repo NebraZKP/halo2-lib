@@ -1514,7 +1514,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
     }
 
-    /// Assigns the cells in `KeccakRow` to `region`.
+    /// Assigns the cells in `KeccakRow` to `region`, returning the flagged cells.
     pub fn set_row_with_flags(
         &self,
         region: &mut Region<'_, F>,
@@ -1552,28 +1552,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
     }
 
     pub fn set_row(&self, region: &mut Region<'_, F>, offset: usize, row: &KeccakRow<F>) {
-        // Fixed selectors
-        for (_, column, value) in &[
-            ("q_enable", self.q_enable, F::from(row.q_enable)),
-            ("q_first", self.q_first, F::from(offset == 0)),
-            ("q_round", self.q_round, F::from(row.q_round)),
-            ("q_round_last", self.q_round_last, F::from(row.q_round_last)),
-            ("q_absorb", self.q_absorb, F::from(row.q_absorb)),
-            ("q_padding", self.q_padding, F::from(row.q_padding)),
-            ("q_padding_last", self.q_padding_last, F::from(row.q_padding_last)),
-        ] {
-            assign_fixed_custom(region, *column, offset, *value);
-        }
-
-        assign_advice_custom(region, self.is_final, offset, Value::known(F::from(row.is_final)));
-
-        // Cell values
-        row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
-            assign_advice_custom(region, column.advice, offset, Value::known(*bit));
-        });
-
-        // Round constant
-        assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
+        self.set_row_with_flags(region, offset, row, &[]);
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
@@ -1641,317 +1620,15 @@ pub fn keccak_phase0<F: Field>(
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     bytes: &[u8],
 ) {
-    let mut bits = into_bits(bytes);
-    let mut s = [[F::zero(); 5]; 5];
-    let absorb_positions = get_absorb_positions();
-    let num_bytes_in_last_block = bytes.len() % RATE;
-    let num_rows_per_round = get_num_rows_per_round();
-    let two = F::from(2u64);
-
-    // Padding
-    bits.push(1);
-    while (bits.len() + 1) % RATE_IN_BITS != 0 {
-        bits.push(0);
-    }
-    bits.push(1);
-
-    let chunks = bits.chunks(RATE_IN_BITS);
-    let num_chunks = chunks.len();
-
-    let mut cell_managers = Vec::with_capacity(NUM_ROUNDS + 1);
-    let mut regions = Vec::with_capacity(NUM_ROUNDS + 1);
-    let mut hash_words = [F::zero(); NUM_WORDS_TO_SQUEEZE];
-
-    for (idx, chunk) in chunks.enumerate() {
-        let is_final_block = idx == num_chunks - 1;
-
-        let mut absorb_rows = Vec::new();
-        // Absorb
-        for (idx, &(i, j)) in absorb_positions.iter().enumerate() {
-            let absorb = pack(&chunk[idx * 64..(idx + 1) * 64]);
-            let from = s[i][j];
-            s[i][j] = field_xor(s[i][j], absorb);
-            absorb_rows.push(AbsorbData { from, absorb, result: s[i][j] });
-        }
-
-        // better memory management to clear already allocated Vecs
-        cell_managers.clear();
-        regions.clear();
-
-        for round in 0..NUM_ROUNDS + 1 {
-            let mut cell_manager = CellManager::new(num_rows_per_round);
-            let mut region = KeccakRegion::new();
-
-            let mut absorb_row = AbsorbData::default();
-            if round < NUM_WORDS_TO_ABSORB {
-                absorb_row = absorb_rows[round].clone();
-            }
-
-            // State data
-            for s in &s {
-                for s in s {
-                    let cell = cell_manager.query_cell_value();
-                    cell.assign(&mut region, 0, *s);
-                }
-            }
-
-            // Absorb data
-            let absorb_from = cell_manager.query_cell_value();
-            let absorb_data = cell_manager.query_cell_value();
-            let absorb_result = cell_manager.query_cell_value();
-            absorb_from.assign(&mut region, 0, absorb_row.from);
-            absorb_data.assign(&mut region, 0, absorb_row.absorb);
-            absorb_result.assign(&mut region, 0, absorb_row.result);
-
-            // Absorb
-            cell_manager.start_region();
-            let part_size = get_num_bits_per_absorb_lookup();
-            let input = absorb_row.from + absorb_row.absorb;
-            let absorb_fat =
-                split::value(&mut cell_manager, &mut region, input, 0, part_size, false, None);
-            cell_manager.start_region();
-            let _absorb_result = transform::value(
-                &mut cell_manager,
-                &mut region,
-                absorb_fat.clone(),
-                true,
-                |v| v & 1,
-                true,
-            );
-
-            // Padding
-            cell_manager.start_region();
-            // Unpack a single word into bytes (for the absorption)
-            // Potential optimization: could do multiple bytes per lookup
-            let packed =
-                split::value(&mut cell_manager, &mut region, absorb_row.absorb, 0, 8, false, None);
-            cell_manager.start_region();
-            let input_bytes =
-                transform::value(&mut cell_manager, &mut region, packed, false, |v| *v, true);
-            cell_manager.start_region();
-            let is_paddings =
-                input_bytes.iter().map(|_| cell_manager.query_cell_value()).collect::<Vec<_>>();
-            debug_assert_eq!(is_paddings.len(), NUM_BYTES_PER_WORD);
-            if round < NUM_WORDS_TO_ABSORB {
-                for (padding_idx, is_padding) in is_paddings.iter().enumerate() {
-                    let byte_idx = round * NUM_BYTES_PER_WORD + padding_idx;
-                    let padding = is_final_block && byte_idx >= num_bytes_in_last_block;
-                    is_padding.assign(&mut region, 0, F::from(padding));
-                }
-            }
-            cell_manager.start_region();
-
-            if round != NUM_ROUNDS {
-                // Theta
-                let part_size = get_num_bits_per_theta_c_lookup();
-                let mut bcf = Vec::new();
-                for s in &s {
-                    let c = s[0] + s[1] + s[2] + s[3] + s[4];
-                    let bc_fat =
-                        split::value(&mut cell_manager, &mut region, c, 1, part_size, false, None);
-                    bcf.push(bc_fat);
-                }
-                cell_manager.start_region();
-                let mut bc = Vec::new();
-                for bc_fat in bcf {
-                    let bc_norm = transform::value(
-                        &mut cell_manager,
-                        &mut region,
-                        bc_fat.clone(),
-                        true,
-                        |v| v & 1,
-                        true,
-                    );
-                    bc.push(bc_norm);
-                }
-                cell_manager.start_region();
-                let mut os = [[F::zero(); 5]; 5];
-                for i in 0..5 {
-                    let t = decode::value(bc[(i + 4) % 5].clone())
-                        + decode::value(rotate(bc[(i + 1) % 5].clone(), 1, part_size));
-                    for j in 0..5 {
-                        os[i][j] = s[i][j] + t;
-                    }
-                }
-                s = os;
-                cell_manager.start_region();
-
-                // Rho/Pi
-                let part_size = get_num_bits_per_base_chi_lookup();
-                let target_word_sizes = target_part_sizes(part_size);
-                let num_word_parts = target_word_sizes.len();
-                let mut rho_pi_chi_cells: [[[Vec<Cell<F>>; 5]; 5]; 3] =
-                    array_init::array_init(|_| {
-                        array_init::array_init(|_| array_init::array_init(|_| Vec::new()))
-                    });
-                let mut column_starts = [0usize; 3];
-                for p in 0..3 {
-                    column_starts[p] = cell_manager.start_region();
-                    let mut row_idx = 0;
-                    for j in 0..5 {
-                        for _ in 0..num_word_parts {
-                            for i in 0..5 {
-                                rho_pi_chi_cells[p][i][j]
-                                    .push(cell_manager.query_cell_value_at_row(row_idx as i32));
-                            }
-                            row_idx = (row_idx + 1) % num_rows_per_round;
-                        }
-                    }
-                }
-                cell_manager.start_region();
-                let mut os_parts: [[Vec<PartValue<F>>; 5]; 5] =
-                    array_init::array_init(|_| array_init::array_init(|_| Vec::new()));
-                for (j, os_part) in os_parts.iter_mut().enumerate() {
-                    for i in 0..5 {
-                        let s_parts = split_uniform::value(
-                            &rho_pi_chi_cells[0][j][(2 * i + 3 * j) % 5],
-                            &mut cell_manager,
-                            &mut region,
-                            s[i][j],
-                            RHO_MATRIX[i][j],
-                            part_size,
-                            true,
-                        );
-
-                        let s_parts = transform_to::value(
-                            &rho_pi_chi_cells[1][j][(2 * i + 3 * j) % 5],
-                            &mut region,
-                            s_parts.clone(),
-                            true,
-                            |v| v & 1,
-                        );
-                        os_part[(2 * i + 3 * j) % 5] = s_parts.clone();
-                    }
-                }
-                cell_manager.start_region();
-
-                // Chi
-                let part_size_base = get_num_bits_per_base_chi_lookup();
-                let three_packed = pack::<F>(&vec![3u8; part_size_base]);
-                let mut os = [[F::zero(); 5]; 5];
-                for j in 0..5 {
-                    for i in 0..5 {
-                        let mut s_parts = Vec::new();
-                        for ((part_a, part_b), part_c) in os_parts[i][j]
-                            .iter()
-                            .zip(os_parts[(i + 1) % 5][j].iter())
-                            .zip(os_parts[(i + 2) % 5][j].iter())
-                        {
-                            let value =
-                                three_packed - two * part_a.value + part_b.value - part_c.value;
-                            s_parts.push(PartValue {
-                                num_bits: part_size_base,
-                                rot: j as i32,
-                                value,
-                            });
-                        }
-                        os[i][j] = decode::value(transform_to::value(
-                            &rho_pi_chi_cells[2][i][j],
-                            &mut region,
-                            s_parts.clone(),
-                            true,
-                            |v| CHI_BASE_LOOKUP_TABLE[*v as usize],
-                        ));
-                    }
-                }
-                s = os;
-                cell_manager.start_region();
-
-                // iota
-                let part_size = get_num_bits_per_absorb_lookup();
-                let input = s[0][0] + pack_u64::<F>(ROUND_CST[round]);
-                let iota_parts = split::value::<F>(
-                    &mut cell_manager,
-                    &mut region,
-                    input,
-                    0,
-                    part_size,
-                    false,
-                    None,
-                );
-                cell_manager.start_region();
-                s[0][0] = decode::value(transform::value(
-                    &mut cell_manager,
-                    &mut region,
-                    iota_parts.clone(),
-                    true,
-                    |v| v & 1,
-                    true,
-                ));
-            }
-
-            // The words to squeeze out: this is the hash digest as words with
-            // NUM_BYTES_PER_WORD (=8) bytes each
-            for (hash_word, a) in hash_words.iter_mut().zip(s.iter()) {
-                *hash_word = a[0];
-            }
-
-            cell_managers.push(cell_manager);
-            regions.push(region);
-        }
-
-        // Now that we know the state at the end of the rounds, set the squeeze data
-        let num_rounds = cell_managers.len();
-        for (idx, word) in hash_words.iter().enumerate() {
-            let cell_manager = &mut cell_managers[num_rounds - 2 - idx];
-            let region = &mut regions[num_rounds - 2 - idx];
-
-            cell_manager.start_region();
-            let squeeze_packed = cell_manager.query_cell_value();
-            squeeze_packed.assign(region, 0, *word);
-
-            cell_manager.start_region();
-            let packed = split::value(cell_manager, region, *word, 0, 8, false, None);
-            cell_manager.start_region();
-            transform::value(cell_manager, region, packed, false, |v| *v, true);
-        }
-        squeeze_digests.push(hash_words);
-
-        for round in 0..NUM_ROUNDS + 1 {
-            let round_cst = pack_u64(ROUND_CST[round]);
-
-            for row_idx in 0..num_rows_per_round {
-                rows.push(KeccakRow {
-                    q_enable: row_idx == 0,
-                    // q_enable_row: true,
-                    q_round: row_idx == 0 && round < NUM_ROUNDS,
-                    q_absorb: row_idx == 0 && round == NUM_ROUNDS,
-                    q_round_last: row_idx == 0 && round == NUM_ROUNDS,
-                    q_padding: row_idx == 0 && round < NUM_WORDS_TO_ABSORB,
-                    q_padding_last: row_idx == 0 && round == NUM_WORDS_TO_ABSORB - 1,
-                    round_cst,
-                    is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
-                    cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
-                });
-                #[cfg(debug_assertions)]
-                {
-                    let mut r = rows.last().unwrap().clone();
-                    r.cell_values.clear();
-                    log::trace!("offset {:?} row idx {} row {:?}", rows.len() - 1, row_idx, r);
-                }
-            }
-            log::trace!(" = = = = = = round {} end", round);
-        }
-        log::trace!(" ====================== chunk {} end", idx);
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        let hash_bytes = s
-            .into_iter()
-            .take(4)
-            .map(|a| {
-                pack_with_base::<F>(&unpack(a[0]), 2)
-                    .to_bytes_le()
-                    .into_iter()
-                    .take(8)
-                    .collect::<Vec<_>>()
-                    .to_vec()
-            })
-            .collect::<Vec<_>>();
-        debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
-        // debug!("data rlc: {:x?}", data_rlc);
-    }
+    let mut flagged_indices = HashMap::new();
+    let mut flagged_words = HashMap::new();
+    keccak_phase0_with_flags(
+        rows,
+        squeeze_digests,
+        &mut flagged_indices,
+        &mut flagged_words,
+        bytes,
+    );
 }
 
 /// Witness generation in `FirstPhase` for a keccak hash digest without
@@ -2023,7 +1700,9 @@ pub fn keccak_phase0_with_flags<F: Field>(
             if round < NUM_WORDS_TO_ABSORB {
                 let cell_offset = absorb_data.rotation as usize;
                 let cell_column_idx = absorb_data.column_idx;
-                let row_index = idx*(NUM_ROUNDS+1)*num_rows_per_round + round*num_rows_per_round + cell_offset;
+                let row_index = idx * (NUM_ROUNDS + 1) * num_rows_per_round
+                    + round * num_rows_per_round
+                    + cell_offset;
                 if flagged_words.insert(row_index, cell_column_idx).is_some() {
                     panic!("Row index {row_index:?} already flagged");
                 };
@@ -2303,7 +1982,6 @@ pub fn keccak_phase0_with_flags<F: Field>(
             })
             .collect::<Vec<_>>();
         debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
-        // debug!("data rlc: {:x?}", data_rlc);
     }
 }
 

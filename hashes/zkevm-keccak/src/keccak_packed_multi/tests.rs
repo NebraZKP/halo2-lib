@@ -119,6 +119,7 @@ fn packed_multi_keccak_simple() {
     verify::<Fr>(k, inputs, true);
 }
 
+/// Cmdline: KECCAK_DEGREE=14 RUST_LOG=info cargo test -- --nocapture packed_multi_keccak_prover
 #[test]
 fn packed_multi_keccak_prover() {
     let _ = env_logger::builder().is_test(true).try_init();
