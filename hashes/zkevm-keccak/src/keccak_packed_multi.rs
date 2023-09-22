@@ -286,8 +286,14 @@ impl<F: FieldExt> CellManager<F> {
             assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
             // This is the column where the input 64-bit words are stored.
-            if advice.index() == 2 {
-                meta.enable_equality(advice);
+            if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
+                s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+            }) {
+                let col_to_enable =
+                    if num_flex_advice == 1 { num_flex_advice + 1 } else { num_flex_advice + 2 };
+                if advice.index() == col_to_enable {
+                    meta.enable_equality(advice);
+                }
             }
             // This is the column where the output bytes are stored.
             if let Ok(col_to_enable) = var("COL_TO_ENABLE")
@@ -920,10 +926,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
         // Absorb data
         let absorb_from = cell_manager.query_cell(meta);
-        // We want to enable the column where the input keccak words
-        // are assigned
-        let width = cell_manager.get_width();
-        std::env::set_var("COL_TO_ENABLE_WORDS", (width + 1).to_string());
         let absorb_data = cell_manager.query_cell(meta);
         let absorb_result = cell_manager.query_cell(meta);
         let mut absorb_from_next = vec![0u64.expr(); NUM_WORDS_TO_ABSORB];
