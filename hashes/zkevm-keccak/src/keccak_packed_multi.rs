@@ -295,12 +295,23 @@ impl<F: FieldExt> CellManager<F> {
                     meta.enable_equality(advice);
                 }
             }
-            // This is the column where the output bytes are stored.
-            if let Ok(col_to_enable) = var("COL_TO_ENABLE")
-                .map(|s| s.parse::<usize>().expect("Cannot parse COL_TO_ENABLE env var as usize"))
-            {
-                if advice.index() == col_to_enable {
-                    meta.enable_equality(advice);
+            // This is the column where the output bytes are stored. It happens at the last keccak column,
+            // whose index will be shifted by the number of flex gate columns.
+            if let Ok(last_keccak_column) = var("LAST_KECCAK_COLUMN").map(|s| {
+                s.parse::<usize>().expect("Cannot parse LAST_KECCAK_COLUMN env var as usize")
+            }) {
+                if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
+                    s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+                }) {
+                    let col_to_enable = last_keccak_column
+                        + if num_flex_advice == 1 {
+                            num_flex_advice + 1
+                        } else {
+                            num_flex_advice + 2
+                        };
+                    if advice.index() == col_to_enable {
+                        meta.enable_equality(advice);
+                    }
                 }
             }
             let mut expr = 0.expr();
@@ -1222,8 +1233,9 @@ impl<F: Field> KeccakCircuitConfig<F> {
         info!("Lookups: {}", lookup_counter);
         let width = cell_manager.get_width();
         // We want to enable the column where the keccak output bytes
-        // are assigned. This will happen four columns from now.
-        std::env::set_var("COL_TO_ENABLE", (width + 4).to_string());
+        // are assigned. For this, we need to know the index of the last keccak
+        // column.
+        std::env::set_var("LAST_KECCAK_COLUMN", (width + 3).to_string());
         info!("Columns: {}", width);
         total_lookup_counter += lookup_counter;
 
