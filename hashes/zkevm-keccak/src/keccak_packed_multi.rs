@@ -11,8 +11,8 @@ use crate::halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Region, Value},
     plonk::{
-        Advice, Challenge, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
-        TableColumn, VirtualCells,
+        Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, TableColumn,
+        VirtualCells,
     },
     poly::Rotation,
 };
@@ -20,11 +20,9 @@ use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::collections::HashMap;
 use std::env::var;
 use std::marker::PhantomData;
-
-#[cfg(test)]
-mod tests;
 
 const MAX_DEGREE: usize = 3;
 const ABSORB_LOOKUP_RANGE: usize = 3;
@@ -287,6 +285,31 @@ impl<F: FieldExt> CellManager<F> {
         } else {
             assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
+            // This is the column where the input 64-bit words are stored.
+            if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
+                s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+            }) {
+                let col_to_enable =
+                    if num_flex_advice == 1 { num_flex_advice + 1 } else { num_flex_advice + 2 };
+                if advice.index() == col_to_enable {
+                    meta.enable_equality(advice);
+                }
+            }
+            // This is the column where the output bytes are stored. It happens at the last keccak column,
+            // whose index will be shifted by the number of flex gate columns.
+            if let Ok(last_keccak_column) = var("LAST_KECCAK_COLUMN").map(|s| {
+                s.parse::<usize>().expect("Cannot parse LAST_KECCAK_COLUMN env var as usize")
+            }) {
+                if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
+                    s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+                }) {
+                    let col_to_enable = last_keccak_column
+                        + if num_flex_advice == 1 { num_flex_advice } else { num_flex_advice + 1 };
+                    if advice.index() == col_to_enable {
+                        meta.enable_equality(advice);
+                    }
+                }
+            }
             let mut expr = 0.expr();
             meta.create_gate("Query column", |meta| {
                 expr = meta.query_advice(advice, Rotation::cur());
@@ -692,7 +715,7 @@ mod split_uniform {
 
 // Transform values using a lookup table
 mod transform {
-    use super::{transform_to, CellManager, Field, FieldExt, KeccakRegion, Part, PartValue};
+    use super::{transform_to, Cell, CellManager, Field, FieldExt, KeccakRegion, Part, PartValue};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
     use itertools::Itertools;
 
@@ -746,6 +769,28 @@ mod transform {
             })
             .collect_vec();
         transform_to::value(&cells, region, input, do_packing, f)
+    }
+
+    pub(crate) fn value_and_return_cells<F: Field>(
+        cell_manager: &mut CellManager<F>,
+        region: &mut KeccakRegion<F>,
+        input: Vec<PartValue<F>>,
+        do_packing: bool,
+        f: fn(&u8) -> u8,
+        uniform_lookup: bool,
+    ) -> Vec<Cell<F>> {
+        let cells = input
+            .iter()
+            .map(|input_part| {
+                if uniform_lookup {
+                    cell_manager.query_cell_value_at_row(input_part.rot)
+                } else {
+                    cell_manager.query_cell_value()
+                }
+            })
+            .collect_vec();
+        transform_to::value(&cells, region, input, do_packing, f);
+        cells
     }
 }
 
@@ -817,7 +862,6 @@ mod transform_to {
 /// KeccakConfig
 #[derive(Clone, Debug)]
 pub struct KeccakCircuitConfig<F> {
-    challenge: Challenge,
     q_enable: Column<Fixed>,
     // q_enable_row: Column<Fixed>,
     q_first: Column<Fixed>,
@@ -827,7 +871,7 @@ pub struct KeccakCircuitConfig<F> {
     q_padding: Column<Fixed>,
     q_padding_last: Column<Fixed>,
 
-    pub keccak_table: KeccakTable,
+    pub is_final: Column<Advice>,
 
     cell_manager: CellManager<F>,
     round_cst: Column<Fixed>,
@@ -840,11 +884,8 @@ pub struct KeccakCircuitConfig<F> {
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
-    pub fn challenge(&self) -> Challenge {
-        self.challenge
-    }
     /// Return a new KeccakCircuitConfig
-    pub fn new(meta: &mut ConstraintSystem<F>, challenge: Challenge) -> Self {
+    pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
         let q_enable = meta.fixed_column();
         // let q_enable_row = meta.fixed_column();
         let q_first = meta.fixed_column();
@@ -854,12 +895,9 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let q_padding = meta.fixed_column();
         let q_padding_last = meta.fixed_column();
         let round_cst = meta.fixed_column();
-        let keccak_table = KeccakTable::construct(meta);
 
-        let is_final = keccak_table.is_enabled;
+        let is_final = meta.advice_column();
         // let length = keccak_table.input_len;
-        let data_rlc = keccak_table.input_rlc;
-        let hash_rlc = keccak_table.output_rlc;
 
         let normalize_3 = array_init::array_init(|_| meta.lookup_table_column());
         let normalize_4 = array_init::array_init(|_| meta.lookup_table_column());
@@ -1189,7 +1227,12 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
         info!("- Post chi:");
         info!("Lookups: {}", lookup_counter);
-        info!("Columns: {}", cell_manager.get_width());
+        let width = cell_manager.get_width();
+        // We want to enable the column where the keccak output bytes
+        // are assigned. For this, we need to know the index of the last keccak
+        // column.
+        std::env::set_var("LAST_KECCAK_COLUMN", (width + 3).to_string());
+        info!("Columns: {}", width);
         total_lookup_counter += lookup_counter;
 
         let mut lookup_counter = 0;
@@ -1295,10 +1338,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 });
             }
 
-            let challenge_expr = meta.query_challenge(challenge);
-            let rlc =
-                hash_bytes.into_iter().reduce(|rlc, x| rlc * challenge_expr.clone() + x).unwrap();
-            cb.require_equal("hash rlc check", rlc, meta.query_advice(hash_rlc, Rotation::cur()));
             cb.gate(meta.query_fixed(q_round_last, Rotation::cur()))
         });
 
@@ -1440,62 +1479,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // TODO: there is probably a way to only require NUM_BYTES_PER_WORD instead of
         // NUM_BYTES_PER_WORD + 1 rows per round, but for simplicity and to keep the
         // gate degree at 3, we just do the obvious thing for now Input data rlc
-        meta.create_gate("data rlc", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-            let q_padding = meta.query_fixed(q_padding, Rotation::cur());
-            let start_new_hash_prev = start_new_hash(meta, Rotation(-(num_rows_per_round as i32)));
-            let data_rlc_prev = meta.query_advice(data_rlc, Rotation(-(num_rows_per_round as i32)));
-
-            // Update the length/data_rlc on rows where we absorb data
-            cb.condition(q_padding.expr(), |cb| {
-                let challenge_expr = meta.query_challenge(challenge);
-                // Use intermediate cells to keep the degree low
-                let mut new_data_rlc =
-                    data_rlc_prev.clone() * not::expr(start_new_hash_prev.expr());
-                let mut data_rlcs = (0..NUM_BYTES_PER_WORD)
-                    .map(|i| meta.query_advice(data_rlc, Rotation(i as i32 + 1)));
-                let intermed_rlc = data_rlcs.next().unwrap();
-                cb.require_equal("initial data rlc", intermed_rlc.clone(), new_data_rlc);
-                new_data_rlc = intermed_rlc;
-                for (byte, is_padding) in input_bytes.iter().zip(is_paddings.iter()) {
-                    new_data_rlc = select::expr(
-                        is_padding.expr(),
-                        new_data_rlc.clone(),
-                        new_data_rlc * challenge_expr.clone() + byte.expr.clone(),
-                    );
-                    if let Some(intermed_rlc) = data_rlcs.next() {
-                        cb.require_equal(
-                            "intermediate data rlc",
-                            intermed_rlc.clone(),
-                            new_data_rlc,
-                        );
-                        new_data_rlc = intermed_rlc;
-                    }
-                }
-                cb.require_equal(
-                    "update data rlc",
-                    meta.query_advice(data_rlc, Rotation::cur()),
-                    new_data_rlc,
-                );
-            });
-            // Keep length/data_rlc the same on rows where we don't absorb data
-            cb.condition(
-                and::expr([
-                    meta.query_fixed(q_enable, Rotation::cur())
-                        - meta.query_fixed(q_first, Rotation::cur()),
-                    not::expr(q_padding),
-                ]),
-                |cb| {
-                    cb.require_equal(
-                        "data_rlc equality check",
-                        meta.query_advice(data_rlc, Rotation::cur()),
-                        data_rlc_prev.clone(),
-                    );
-                },
-            );
-            cb.gate(1.expr())
-        });
 
         info!("Degree: {}", meta.degree());
         info!("Minimum rows: {}", meta.minimum_rows());
@@ -1517,7 +1500,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         info!("uniform part sizes: {:?}", target_part_sizes(get_num_bits_per_theta_c_lookup()));
 
         KeccakCircuitConfig {
-            challenge,
             q_enable,
             // q_enable_row,
             q_first,
@@ -1526,7 +1508,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             q_round_last,
             q_padding,
             q_padding_last,
-            keccak_table,
+            is_final,
             cell_manager,
             round_cst,
             normalize_3,
@@ -1546,7 +1528,14 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
     }
 
-    pub fn set_row(&self, region: &mut Region<'_, F>, offset: usize, row: &KeccakRow<F>) {
+    /// Assigns the cells in `KeccakRow` to `region`, returning the flagged cells.
+    pub fn set_row_with_flags(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        row: &KeccakRow<F>,
+        flags: &[usize],
+    ) -> Vec<KeccakAssignedValue<'_, F>> {
         // Fixed selectors
         for (_, column, value) in &[
             ("q_enable", self.q_enable, F::from(row.q_enable)),
@@ -1559,21 +1548,25 @@ impl<F: Field> KeccakCircuitConfig<F> {
         ] {
             assign_fixed_custom(region, *column, offset, *value);
         }
-
-        assign_advice_custom(
-            region,
-            self.keccak_table.is_enabled,
-            offset,
-            Value::known(F::from(row.is_final)),
-        );
-
+        assign_advice_custom(region, self.is_final, offset, Value::known(F::from(row.is_final)));
+        let mut result = Vec::new();
         // Cell values
-        row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
-            assign_advice_custom(region, column.advice, offset, Value::known(*bit));
-        });
-
+        row.cell_values.iter().zip(self.cell_manager.columns()).enumerate().for_each(
+            |(col_index, (bit, column))| {
+                let assigned_advice =
+                    assign_advice_custom(region, column.advice, offset, Value::known(*bit));
+                if flags.contains(&col_index) {
+                    result.push(assigned_advice);
+                }
+            },
+        );
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
+        result
+    }
+
+    pub fn set_row(&self, region: &mut Region<'_, F>, offset: usize, row: &KeccakRow<F>) {
+        self.set_row_with_flags(region, offset, row, &[]);
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
@@ -1641,6 +1634,34 @@ pub fn keccak_phase0<F: Field>(
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     bytes: &[u8],
 ) {
+    let mut flagged_indices = HashMap::new();
+    let mut flagged_words = HashMap::new();
+    keccak_phase0_with_flags(
+        rows,
+        squeeze_digests,
+        &mut flagged_indices,
+        &mut flagged_words,
+        bytes,
+    );
+}
+
+/// Fills [`KeccakRow`]s with the trace of the computation of the keccak
+/// hash of `bytes`. Returns:
+/// - `squeeze_digests`: vector of output 8-byte words
+/// - `flagged_indices`: HashMap with the positions of the cells holding
+/// the output bytes. The key is the row index, and the value is a pair
+/// consisting of the column index and the order in which they appear as the keccak output
+/// of a particular query.
+/// - `flagged_words`: HashMap with the positions of the cells holding the
+/// the input 8-byte words. The key is the row index and the value is the column index.
+/// These are already ordered.
+pub fn keccak_phase0_with_flags<F: Field>(
+    rows: &mut Vec<KeccakRow<F>>,
+    squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
+    flagged_indices: &mut HashMap<usize, (usize, usize)>,
+    flagged_words: &mut HashMap<usize, usize>,
+    bytes: &[u8],
+) {
     let mut bits = into_bits(bytes);
     let mut s = [[F::zero(); 5]; 5];
     let absorb_positions = get_absorb_positions();
@@ -1698,6 +1719,20 @@ pub fn keccak_phase0<F: Field>(
             // Absorb data
             let absorb_from = cell_manager.query_cell_value();
             let absorb_data = cell_manager.query_cell_value();
+            // The cell above holds a word which will be absorbed. Therefore
+            // we add it to `flagged_words`.
+            if round < NUM_WORDS_TO_ABSORB {
+                let cell_offset = absorb_data.rotation as usize;
+                let cell_column_idx = absorb_data.column_idx;
+                // We compute the row index from the cell offset, the current
+                // round and the current chunk
+                let row_index = idx * (NUM_ROUNDS + 1) * num_rows_per_round
+                    + round * num_rows_per_round
+                    + cell_offset;
+                if flagged_words.insert(row_index, cell_column_idx).is_some() {
+                    panic!("Row index {row_index:?} already flagged");
+                };
+            }
             let absorb_result = cell_manager.query_cell_value();
             absorb_from.assign(&mut region, 0, absorb_row.from);
             absorb_data.assign(&mut region, 0, absorb_row.absorb);
@@ -1892,9 +1927,12 @@ pub fn keccak_phase0<F: Field>(
 
         // Now that we know the state at the end of the rounds, set the squeeze data
         let num_rounds = cell_managers.len();
+        let mut counter = 0usize;
+
         for (idx, word) in hash_words.iter().enumerate() {
             let cell_manager = &mut cell_managers[num_rounds - 2 - idx];
             let region = &mut regions[num_rounds - 2 - idx];
+            let round_number = num_rounds - 2 - idx;
 
             cell_manager.start_region();
             let squeeze_packed = cell_manager.query_cell_value();
@@ -1903,7 +1941,30 @@ pub fn keccak_phase0<F: Field>(
             cell_manager.start_region();
             let packed = split::value(cell_manager, region, *word, 0, 8, false, None);
             cell_manager.start_region();
-            transform::value(cell_manager, region, packed, false, |v| *v, true);
+            let transformed_cells = transform::value_and_return_cells(
+                cell_manager,
+                region,
+                packed,
+                false,
+                |v| *v,
+                true,
+            );
+            // `transformed_cells` hold the cells which contain the output bytes for each chunk.
+            // Therefore we add them to `flagged_indices`.
+            if is_final_block {
+                for cell in transformed_cells {
+                    let cell_offset = cell.rotation as usize;
+                    let cell_column_idx = cell.column_idx;
+                    // We compute the row index from the round number and the cell offset.
+                    let row_index = (num_chunks - 1) * (NUM_ROUNDS + 1) * num_rows_per_round
+                        + round_number * num_rows_per_round
+                        + cell_offset;
+                    if flagged_indices.insert(row_index, (cell_column_idx, counter)).is_some() {
+                        panic!("Row index {row_index:?} already flagged");
+                    };
+                    counter += 1;
+                }
+            }
         }
         squeeze_digests.push(hash_words);
 
@@ -1950,7 +2011,6 @@ pub fn keccak_phase0<F: Field>(
             })
             .collect::<Vec<_>>();
         debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
-        // debug!("data rlc: {:x?}", data_rlc);
     }
 }
 
