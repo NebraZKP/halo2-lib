@@ -304,11 +304,7 @@ impl<F: FieldExt> CellManager<F> {
                     s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
                 }) {
                     let col_to_enable = last_keccak_column
-                        + if num_flex_advice == 1 {
-                            num_flex_advice + 1
-                        } else {
-                            num_flex_advice + 2
-                        };
+                        + if num_flex_advice == 1 { num_flex_advice } else { num_flex_advice + 1 };
                     if advice.index() == col_to_enable {
                         meta.enable_equality(advice);
                     }
