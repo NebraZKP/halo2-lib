@@ -1,0 +1,189 @@
+
+running 1 test
+read params from ./params/kzg_bn254_20.srs
+Start:   Witness generation for circuit in Keygen stage
+computing length 200 MSM
+FlexGateConfigParams { strategy: Vertical, k: 20, num_advice_per_phase: [21, 0, 0], num_lookup_advice_per_phase: [3, 0, 0], num_fixed: 1 }
+Gate Chip | Phase 0: 21305157 advice cells , 2779818 lookup advice cells
+Total 262 fixed cells
+End:     Witness generation for circuit in Keygen stage ............................436.865ms
+Start:   Generating vkey
+k: 20, extended_k: 22
+End:     Generating vkey ...........................................................32.727s
+Start:   Generating pkey
+End:     Generating pkey ...........................................................26.666s
+Start:   Proving time
+··Start:   Witness generation for circuit in Prover stage
+computing length 200 MSM
+test bn254::tests::msm::test_msm has been running for over 60 seconds
+··End:     Witness generation for circuit in Prover stage ..........................317.428ms
+Entered halo2_proofs::plonk::prover::create_proof
+··Start:   Phase 1: Witness assignment and MSM commitments
+····Start:   Witness Assignment
+····End:     Witness Assignment ....................................................1.015s
+····Start:   Advice value inversion
+····End:     Advice value inversion ................................................1.576s
+····Start:   Advice Column Commitment
+····End:     Advice Column Commitment ..............................................6.129s
+··End:     Phase 1: Witness assignment and MSM commitments .........................9.474s
+··Start:   Phase 2: Lookup commit permuted
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................60.340ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................4.719ms
+····Start:   to_vec
+····End:     to_vec ................................................................3.164ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................9.454ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................7.298ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................54.578ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................1.967ms
+····Start:   to_vec
+····End:     to_vec ................................................................3.642ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................12.962ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................6.150ms
+····Start:   permute_par input hashmap (cpu par)
+····End:     permute_par input hashmap (cpu par) ...................................46.192ms
+····Start:   permute_par input unique ranges (cpu par)
+····End:     permute_par input unique ranges (cpu par) .............................1.466ms
+····Start:   to_vec
+····End:     to_vec ................................................................3.746ms
+····Start:   permute_par sort table
+····End:     permute_par sort table ................................................10.901ms
+····Start:   leftover table coeffs (cpu par)
+····End:     leftover table coeffs (cpu par) .......................................6.393ms
+··End:     Phase 2: Lookup commit permuted .........................................1.326s
+··Start:   Phase 3a: Commit to permutations
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................140.520ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................20.416µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................920.054ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................389.093ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................136.269ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................20.125µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................898.973ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................328.981ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................139.333ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................20.416µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................978.908ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................338.961ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................143.910ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................22.166µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................913.864ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................364.670ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................136.716ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................22.083µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................916.438ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................357.196ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................133.365ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................25.333µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................908.415ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................371.446ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................140.632ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................28.500µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................960.850ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................342.222ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................131.028ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................19.333µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................1.009s
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................349.103ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................131.096ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................21.625µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................898.397ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................377.810ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................135.899ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................18.833µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................983.928ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................333.915ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................139.029ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................21.041µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................992.457ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................424.940ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................145.993ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................19.458µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................898.213ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................395.978ms
+····Start:   Compute perm poly values
+····End:     Compute perm poly values ..............................................118.413ms
+····Start:   Perm poly fft
+····End:     Perm poly fft .........................................................20.500µs
+····Start:   Perm poly commitment
+····End:     Perm poly commitment ..................................................714.068ms
+····Start:   Last two ffts timer
+····End:     Last two ffts timer ...................................................372.371ms
+··End:     Phase 3a: Commit to permutations ........................................19.016s
+··Start:   Phase 3b: Lookup commit product
+··End:     Phase 3b: Lookup commit product .........................................3.395s
+··Start:   Commit to vanishing argument's random poly
+··End:     Commit to vanishing argument's random poly ..............................928.333ms
+··Start:   Calculate advice polys (fft)
+··End:     Calculate advice polys (fft) ............................................1.555s
+··Start:   Phase 4: Evaluate h(X)
+cosets ........ 6.87841s
+custom gates ........ 4.161354s
+permutations ........ 10.983393s
+lookups ........ 5.0779s
+··End:     Phase 4: Evaluate h(X) ..................................................27.327s
+··Start:   Compute quotient polynomial and commitments to its pieces
+··End:     Compute quotient polynomial and commitments to its pieces ...............3.062s
+··Start:   Compute challenge point evaluations
+··End:     Compute challenge point evaluations .....................................4.944s
+··Start:   Phase 5: multiopen
+··End:     Phase 5: multiopen ......................................................5.698s
+End:     Proving time ..............................................................77.088s
+test bn254::tests::msm::test_msm ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 137.53s
+

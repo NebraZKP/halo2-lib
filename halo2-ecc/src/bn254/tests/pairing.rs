@@ -73,6 +73,30 @@ fn pairing_test<F: PrimeField>(
     );
 }
 
+fn many_miller_pairing_test<F: PrimeField>(
+    ctx: &mut Context<F>,
+    params: PairingCircuitParams,
+    P: G1Affine,
+    Q: G2Affine,
+    num_miller: usize,
+) {
+    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    let range = RangeChip::<F>::default(params.lookup_bits);
+    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let chip = PairingChip::new(&fp_chip);
+    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
+    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
+    // test optimal ate pairing
+    let f = chip.many_miller_pairing(ctx, &Q_assigned, &P_assigned, num_miller);
+    let actual_f = pairing(&P, &Q);
+    let fp12_chip = Fp12Chip::new(&fp_chip);
+    // cannot directly compare f and actual_f because `Gt` has private field `Fq12`
+    assert_eq!(
+        format!("Gt({:?})", fp12_chip.get_assigned_value(&f.into())),
+        format!("{actual_f:?}")
+    );
+}
+
 fn build_setup(
     params: PairingCircuitParams,
     stage: CircuitBuilderStage,
@@ -166,15 +190,121 @@ fn random_pairing_check_fail_circuit(
     circuit
 }
 
+/// Does `num_miller` Miller loops before a single final exponentiation.
+/// Test does not do anything meaningful with the extra Miller loops.
+fn many_miller_one_final_exp_circuit(
+    params: PairingCircuitParams,
+    stage: CircuitBuilderStage,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+    num_miller: usize,
+) -> RangeCircuitBuilder<Fr> {
+    let (k, mut builder) = build_setup(params, stage);
+    let alpha = Fr::random(OsRng);
+    let beta = Fr::random(OsRng);
+    let P = G1Affine::from(G1Affine::generator() * alpha);
+    let Q = G2Affine::from(G2Affine::generator() * beta);
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
+    many_miller_pairing_test::<Fr>(builder.main(0), params, P, Q, num_miller);
+    let circuit = build_circuit(k, builder, stage, break_points);
+    end_timer!(start0);
+    circuit
+}
+
+// cargo test --release --package halo2-ecc --lib --features default -- bn254::tests::pairing::test_many_miller_pairing --exact --nocapture > /Users/thomascnorton/Documents/Openzl/axiom/halo2-lib/halo2-ecc/results/bn254/pairing_timing/pairing_miller_1.txt
 #[test]
-fn test_pairing() {
+fn test_many_miller_pairing() {
+    let num_miller = 2;
+
     let path = "configs/bn254/pairing_circuit.config";
-    let params: PairingCircuitParams = serde_json::from_reader(
+    let bench_params: PairingCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
-    let circuit = random_pairing_circuit(params, CircuitBuilderStage::Mock, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+
+    let k = bench_params.degree;
+    let params = gen_srs(k);
+    let rng = OsRng;
+
+    let circuit = many_miller_one_final_exp_circuit(
+        bench_params,
+        CircuitBuilderStage::Keygen,
+        None,
+        num_miller,
+    );
+
+    let vk_time = start_timer!(|| "Generating vkey");
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    end_timer!(vk_time);
+
+    let pk_time = start_timer!(|| "Generating pkey");
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    end_timer!(pk_time);
+
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
+    // create a proof
+    let proof_time = start_timer!(|| "Proving time");
+    let circuit = many_miller_one_final_exp_circuit(
+        bench_params,
+        CircuitBuilderStage::Prover,
+        Some(break_points),
+        num_miller,
+    );
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let _proof = transcript.finalize();
+    end_timer!(proof_time);
+}
+
+// cargo test --release --package halo2-ecc --lib --features default -- bn254::tests::pairing::test_pairing --exact --nocapture > /Users/thomascnorton/Documents/Openzl/axiom/halo2-lib/halo2-ecc/results/bn254/pairing_timing/pairing_timing.txt
+#[test]
+fn test_pairing() {
+    let path = "configs/bn254/pairing_circuit.config";
+    let bench_params: PairingCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+
+    let k = bench_params.degree;
+    let params = gen_srs(k);
+    let rng = OsRng;
+
+    let circuit = random_pairing_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+
+    let vk_time = start_timer!(|| "Generating vkey");
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    end_timer!(vk_time);
+
+    let pk_time = start_timer!(|| "Generating pkey");
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    end_timer!(pk_time);
+
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
+    // create a proof
+    let proof_time = start_timer!(|| "Proving time");
+    let circuit =
+        random_pairing_circuit(bench_params, CircuitBuilderStage::Prover, Some(break_points));
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let _proof = transcript.finalize();
+    end_timer!(proof_time);
 }
 
 #[test]
@@ -200,6 +330,7 @@ fn test_pairing_check_fail() {
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
+// cargo test --release --package halo2-ecc --lib --features halo2-axiom -- bn254::tests::pairing::bench_pairing --exact --nocapture > /Users/thomascnorton/Documents/Openzl/axiom/halo2-lib/pairing_test_output.txt
 #[test]
 fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
     let rng = OsRng;
@@ -219,7 +350,7 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
-
+        println!("Bench parameters: {bench_params:?}");
         let params = gen_srs(k);
         let circuit = random_pairing_circuit(bench_params, CircuitBuilderStage::Keygen, None);
 

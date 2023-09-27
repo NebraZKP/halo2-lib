@@ -26,6 +26,24 @@ struct CircuitParams {
     batch_size: usize,
 }
 
+fn g1_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _points: Vec<G1Affine>) {
+    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    let range = RangeChip::<F>::default(params.lookup_bits);
+    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let g1_chip = EccChip::new(&fp_chip);
+
+    let points =
+        _points.iter().map(|pt| g1_chip.assign_point_unchecked(ctx, *pt)).collect::<Vec<_>>();
+
+    let acc = g1_chip.sum::<G1Affine>(ctx, points);
+
+    let answer = _points.iter().fold(G1Affine::identity(), |a, b| (a + b).to_affine());
+    let x = fp_chip.get_assigned_value(&acc.x.into());
+    let y = fp_chip.get_assigned_value(&acc.y.into());
+    assert_eq!(answer.x, x);
+    assert_eq!(answer.y, y);
+}
+
 fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _points: Vec<G2Affine>) {
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     let range = RangeChip::<F>::default(params.lookup_bits);
@@ -45,25 +63,66 @@ fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _poin
     assert_eq!(answer.y, y);
 }
 
+// cargo test --release --package halo2-ecc --lib --features default -- bn254::tests::ec_add::test_ec_add --exact --nocapture > /Users/thomascnorton/Documents/Openzl/axiom/halo2-lib/halo2-ecc/results/bn254/g1_add_timing/ec_add_shplonk_100.txt
 #[test]
 fn test_ec_add() {
+    use crate::halo2_proofs::poly::kzg::multiopen::ProverGWC;
+
     let path = "configs/bn254/ec_add_circuit.config";
-    let params: CircuitParams = serde_json::from_reader(
+    let bench_params: CircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
 
-    let k = params.degree;
-    let points = (0..params.batch_size).map(|_| G2Affine::random(OsRng)).collect_vec();
+    let k = bench_params.degree;
+    let mut rng = OsRng;
 
-    let mut builder = GateThreadBuilder::<Fr>::mock();
-    g2_add_test(builder.main(0), params, points);
+    let params = gen_srs(k);
 
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    // keygen
+    let start0 = start_timer!(|| "Witness generation for empty circuit");
+    let circuit = {
+        let points = vec![G1Affine::generator(); bench_params.batch_size];
+        let mut builder = GateThreadBuilder::<Fr>::keygen();
+        g1_add_test(builder.main(0), bench_params, points);
+        builder.config(k as usize, Some(20));
+        RangeCircuitBuilder::keygen(builder)
+    };
+    end_timer!(start0);
+    let vk_time = start_timer!(|| "Generating vkey");
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    end_timer!(vk_time);
+    let pk_time = start_timer!(|| "Generating pkey");
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    end_timer!(pk_time);
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
+
+    // create a proof
+    let points = (0..bench_params.batch_size).map(|_| G1Affine::random(&mut rng)).collect_vec();
+    let proof_time = start_timer!(|| "Proving time");
+    let proof_circuit = {
+        let mut builder = GateThreadBuilder::<Fr>::prover();
+        g1_add_test(builder.main(0), bench_params, points);
+        builder.config(k as usize, Some(20));
+        RangeCircuitBuilder::prover(builder, break_points)
+    };
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        // ProverSHPLONK<'_, Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&params, &pk, &[proof_circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let _proof = transcript.finalize();
+    end_timer!(proof_time);
 }
 
+// cargo test --release --package halo2-ecc --lib --features halo2-axiom -- bn254::tests::ec_add::bench_ec_add --exact --nocapture > ec_add_cpu_native.txt
 #[test]
 fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "configs/bn254/bench_ec_add.config";

@@ -522,6 +522,22 @@ impl<'chip, F: PrimeField> PairingChip<'chip, F> {
         fp12_chip.final_exp(ctx, f0)
     }
 
+    // optimal Ate pairing
+    pub fn many_miller_pairing(
+        &self,
+        ctx: &mut Context<F>,
+        Q: &EcPoint<F, FqPoint<F>>,
+        P: &EcPoint<F, FpPoint<F>>,
+        num_miller: usize,
+    ) -> FqPoint<F> {
+        let f0 = self.miller_loop(ctx, Q, P);
+        // Extra miller loop repetitions
+        let _ = core::iter::repeat(self.miller_loop(ctx, Q, P)).take(num_miller - 1).collect::<Vec<_>>();
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
+        // final_exp implemented in final_exp module
+        fp12_chip.final_exp(ctx, f0)
+    }
+
     /*
      * Conducts an efficient pairing check e(P, Q) = e(S, T) using only one
      * final exponentiation. In particular, this constraints

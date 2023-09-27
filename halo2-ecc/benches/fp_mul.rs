@@ -45,7 +45,7 @@ fn fp_mul_bench<F: PrimeField>(
     let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
 
     let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
-    for _ in 0..2857 {
+    for _ in 0..1000 {
         chip.mul(ctx, &a, &b);
     }
 }
@@ -123,3 +123,5 @@ criterion_group! {
     targets = bench
 }
 criterion_main!(benches);
+
+// RUSTFLAGS='-C target-cpu=native' cargo bench --bench fp_mul > fp_mul_bench_2857_cpu_native.txt

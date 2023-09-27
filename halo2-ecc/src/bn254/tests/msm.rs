@@ -107,18 +107,53 @@ fn random_msm_circuit(
     circuit
 }
 
+use crate::halo2_proofs::poly::kzg::multiopen::ProverGWC;
+// cargo test --release --package halo2-ecc --lib --features default -- bn254::tests::msm::test_msm --exact --nocapture > /Users/thomascnorton/Documents/Openzl/axiom/halo2-lib/halo2-ecc/results/bn254/msm_timing/msm_kzg_timing_100.txt
 #[test]
 fn test_msm() {
     let path = "configs/bn254/msm_circuit.config";
-    let params: MSMCircuitParams = serde_json::from_reader(
+    let bench_params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
 
-    let circuit = random_msm_circuit(params, CircuitBuilderStage::Mock, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    // let circuit = random_msm_circuit(params, CircuitBuilderStage::Mock, None);
+    // MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    let k = bench_params.degree;
+    let rng = OsRng;
+
+    let params = gen_srs(k);
+    let circuit = random_msm_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+
+    let vk_time = start_timer!(|| "Generating vkey");
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    end_timer!(vk_time);
+
+    let pk_time = start_timer!(|| "Generating pkey");
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    end_timer!(pk_time);
+
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
+    // create a proof
+    let proof_time = start_timer!(|| "Proving time");
+    let circuit = random_msm_circuit(bench_params, CircuitBuilderStage::Prover, Some(break_points));
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        // ProverSHPLONK<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let _proof = transcript.finalize();
+    end_timer!(proof_time);
 }
 
+// cargo test --release --package halo2-ecc --lib --features default -- bn254::tests::msm::bench_msm --exact --nocapture > msm_var_base_test_verbose.txt
 #[test]
 fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "configs/bn254/bench_msm.config";
