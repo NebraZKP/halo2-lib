@@ -12,7 +12,7 @@ itertools = "0.10.3"
 lazy_static = "1.4"
 log = "0.4"
 num-bigint = { version = "0.4" }
-halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib.git", version = "0.3.0", tag = "v0.3.0-ce", package = "halo2-base", features = ["halo2-axiom"] }
+halo2-base = { path = "../../halo2-base", features = ["halo2-axiom"] }
 rayon = "1.6.1"
 
 [dev-dependencies]
