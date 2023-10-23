@@ -1649,7 +1649,7 @@ pub fn keccak_phase0<F: Field>(
 /// hash of `bytes`. Returns:
 /// - `squeeze_digests`: vector of output 8-byte words
 /// - `flagged_indices`: HashMap with the positions of the cells holding
-/// the output bytes. The key is the row index, and the value is a pair
+/// the output bytes. The key is the pair (chunk index, row index), and the value is a pair
 /// consisting of the column index and the order in which they appear as the keccak output
 /// of a particular query.
 /// - `flagged_words`: HashMap with the positions of the cells holding the
@@ -1658,7 +1658,7 @@ pub fn keccak_phase0<F: Field>(
 pub fn keccak_phase0_with_flags<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-    flagged_indices: &mut HashMap<usize, (usize, usize)>,
+    flagged_indices: &mut HashMap<(usize, usize), (usize, usize)>,
     flagged_words: &mut HashMap<usize, usize>,
     bytes: &[u8],
 ) {
@@ -1928,6 +1928,7 @@ pub fn keccak_phase0_with_flags<F: Field>(
         // Now that we know the state at the end of the rounds, set the squeeze data
         let num_rounds = cell_managers.len();
         let mut counter = 0usize;
+        let chunk_idx = idx;
 
         for (idx, word) in hash_words.iter().enumerate() {
             let cell_manager = &mut cell_managers[num_rounds - 2 - idx];
@@ -1951,19 +1952,20 @@ pub fn keccak_phase0_with_flags<F: Field>(
             );
             // `transformed_cells` hold the cells which contain the output bytes for each chunk.
             // Therefore we add them to `flagged_indices`.
-            if is_final_block {
-                for cell in transformed_cells {
-                    let cell_offset = cell.rotation as usize;
-                    let cell_column_idx = cell.column_idx;
-                    // We compute the row index from the round number and the cell offset.
-                    let row_index = (num_chunks - 1) * (NUM_ROUNDS + 1) * num_rows_per_round
-                        + round_number * num_rows_per_round
-                        + cell_offset;
-                    if flagged_indices.insert(row_index, (cell_column_idx, counter)).is_some() {
-                        panic!("Row index {row_index:?} already flagged");
-                    };
-                    counter += 1;
-                }
+            for cell in transformed_cells {
+                let cell_offset = cell.rotation as usize;
+                let cell_column_idx = cell.column_idx;
+                // We compute the row index from the round number and the cell offset.
+                let row_index = chunk_idx * (NUM_ROUNDS + 1) * num_rows_per_round
+                    + round_number * num_rows_per_round
+                    + cell_offset;
+                if flagged_indices
+                    .insert((chunk_idx, row_index), (cell_column_idx, counter))
+                    .is_some()
+                {
+                    panic!("Row index {row_index:?} already flagged");
+                };
+                counter += 1;
             }
         }
         squeeze_digests.push(hash_words);
