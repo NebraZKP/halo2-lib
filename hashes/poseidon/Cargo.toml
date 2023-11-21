@@ -13,7 +13,7 @@ log = "0.4"
 num-bigint = { version = "0.4" }
 halo2-base = { path = "../../halo2-base", default-features = false, features = ["halo2-axiom"] }
 rayon = "1.6.1"
-poseidon = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "poseidon" }
+poseidon = { git = "ssh://git@github.com:NebraZKP/halo2-gpu-scroll.git", branch = "poseidon", package = "poseidon" }
 
 [dev-dependencies]
 hex = "0.4.3"
