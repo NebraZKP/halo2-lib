@@ -142,6 +142,19 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonChip<F, T, RATE>
         })
     }
 
+    pub fn new_with_state(
+        r_f: usize,
+        r_p: usize,
+        init_state: [AssignedValue<F>; T],
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            spec: Spec::new(r_f, r_p),
+            init_state,
+            state: PoseidonState { s: init_state },
+            absorbing: Vec::new(),
+        })
+    }
+
     pub fn clear(&mut self) {
         self.state = PoseidonState { s: self.init_state };
         self.absorbing.clear();
@@ -151,26 +164,49 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonChip<F, T, RATE>
         self.absorbing.extend_from_slice(elements);
     }
 
+    pub fn permute_and_return_output(
+        &mut self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+    ) -> AssignedValue<F> {
+        self.permutation(ctx, gate, vec![]);
+        self.state.s[1]
+    }
+
+    pub fn intermediate_states(
+        &mut self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+    ) -> (Vec<[AssignedValue<F>; T]>, bool) {
+        let mut input_elements = vec![];
+        input_elements.append(&mut self.absorbing);
+
+        let mut padding_offset = 0;
+        let mut result = Vec::new();
+
+        for chunk in input_elements.chunks(RATE) {
+            padding_offset = RATE - chunk.len();
+            self.permutation(ctx, gate, chunk.to_vec());
+            result.push(self.state.s);
+        }
+
+        (result, padding_offset == 0)
+    }
+
     pub fn squeeze(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
     ) -> Result<AssignedValue<F>, Error> {
-        let mut input_elements = vec![];
-        input_elements.append(&mut self.absorbing);
+        let (intermediate_values, needs_extra_perm) = self.intermediate_states(ctx, gate);
 
-        let mut padding_offset = 0;
-
-        for chunk in input_elements.chunks(RATE) {
-            padding_offset = RATE - chunk.len();
-            self.permutation(ctx, gate, chunk.to_vec());
+        if needs_extra_perm {
+            Ok(self.permute_and_return_output(ctx, gate))
+        } else {
+            Ok(intermediate_values
+                .last()
+                .expect("Intermediate values must contain at least one element")[1])
         }
-
-        if padding_offset == 0 {
-            self.permutation(ctx, gate, vec![]);
-        }
-
-        Ok(self.state.s[1])
     }
 
     fn permutation(
