@@ -183,6 +183,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonChip<F, T, RATE>
 
         let mut padding_offset = 0;
         let mut result = Vec::new();
+        result.push(self.state.s);
 
         for chunk in input_elements.chunks(RATE) {
             padding_offset = RATE - chunk.len();
