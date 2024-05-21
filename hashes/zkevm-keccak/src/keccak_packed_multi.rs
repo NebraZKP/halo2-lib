@@ -1648,18 +1648,17 @@ pub fn keccak_phase0<F: Field>(
 /// Fills [`KeccakRow`]s with the trace of the computation of the keccak
 /// hash of `bytes`. Returns:
 /// - `squeeze_digests`: vector of output 8-byte words
-/// - `flagged_indices`: HashMap with the positions of the cells holding
+/// - `intermediate_digest_locations`: HashMap with the positions of the cells holding
 /// the output bytes. The key is the pair (chunk index, row index), and the value is a pair
-/// consisting of the column index and the order in which they appear as the keccak output
-/// of a particular query.
-/// - `flagged_words`: HashMap with the positions of the cells holding the
+/// consisting of the column index and the index of the given byte within the intermediate digest.
+/// - `input_word_locations`: HashMap with the positions of the cells holding the
 /// the input 8-byte words. The key is the row index and the value is the column index.
 /// These are already ordered.
 pub fn keccak_phase0_with_flags<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-    flagged_indices: &mut HashMap<(usize, usize), (usize, usize)>,
-    flagged_words: &mut HashMap<usize, usize>,
+    intermediate_digest_locations: &mut HashMap<(usize, usize), (usize, usize)>,
+    input_word_locations: &mut HashMap<usize, usize>,
     bytes: &[u8],
 ) {
     let mut bits = into_bits(bytes);
@@ -1729,7 +1728,7 @@ pub fn keccak_phase0_with_flags<F: Field>(
                 let row_index = idx * (NUM_ROUNDS + 1) * num_rows_per_round
                     + round * num_rows_per_round
                     + cell_offset;
-                if flagged_words.insert(row_index, cell_column_idx).is_some() {
+                if input_word_locations.insert(row_index, cell_column_idx).is_some() {
                     panic!("Row index {row_index:?} already flagged");
                 };
             }
@@ -1959,7 +1958,7 @@ pub fn keccak_phase0_with_flags<F: Field>(
                 let row_index = chunk_idx * (NUM_ROUNDS + 1) * num_rows_per_round
                     + round_number * num_rows_per_round
                     + cell_offset;
-                if flagged_indices
+                if intermediate_digest_locations
                     .insert((chunk_idx, row_index), (cell_column_idx, counter))
                     .is_some()
                 {
