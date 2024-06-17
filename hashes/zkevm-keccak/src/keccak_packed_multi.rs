@@ -291,6 +291,8 @@ impl<F: FieldExt> CellManager<F> {
             }) {
                 let col_to_enable =
                     if num_flex_advice == 1 { num_flex_advice + 1 } else { num_flex_advice + 2 };
+                println!("Num flex advice: {num_flex_advice:?}");
+                println!("Col for input words: {col_to_enable:?}");
                 if advice.index() == col_to_enable {
                     meta.enable_equality(advice);
                 }
@@ -305,6 +307,8 @@ impl<F: FieldExt> CellManager<F> {
                 }) {
                     let col_to_enable = last_keccak_column
                         + if num_flex_advice == 1 { num_flex_advice } else { num_flex_advice + 1 };
+                    println!("Last keccak column: {last_keccak_column:?}");
+                    println!("Col for output bytes: {col_to_enable:?}");
                     if advice.index() == col_to_enable {
                         meta.enable_equality(advice);
                     }
