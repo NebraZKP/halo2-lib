@@ -286,13 +286,10 @@ impl<F: FieldExt> CellManager<F> {
             assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
             // This is the column where the input 64-bit words are stored.
-            if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
-                s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+            if let Ok(num_flex_cols) = var("FLEX_GATE_NUM_COLS").map(|s| {
+                s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_COLS env var as usize")
             }) {
-                let col_to_enable =
-                    if num_flex_advice == 1 { num_flex_advice + 1 } else { num_flex_advice + 2 };
-                println!("Num flex advice: {num_flex_advice:?}");
-                println!("Col for input words: {col_to_enable:?}");
+                let col_to_enable = num_flex_cols + 1;
                 if advice.index() == col_to_enable {
                     meta.enable_equality(advice);
                 }
@@ -302,13 +299,10 @@ impl<F: FieldExt> CellManager<F> {
             if let Ok(last_keccak_column) = var("LAST_KECCAK_COLUMN").map(|s| {
                 s.parse::<usize>().expect("Cannot parse LAST_KECCAK_COLUMN env var as usize")
             }) {
-                if let Ok(num_flex_advice) = var("FLEX_GATE_NUM_ADVICE").map(|s| {
-                    s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_ADVICE env var as usize")
+                if let Ok(num_flex_cols) = var("FLEX_GATE_NUM_COLS").map(|s| {
+                    s.parse::<usize>().expect("Cannot parse FLEX_GATE_NUM_COLS env var as usize")
                 }) {
-                    let col_to_enable = last_keccak_column
-                        + if num_flex_advice == 1 { num_flex_advice } else { num_flex_advice + 1 };
-                    println!("Last keccak column: {last_keccak_column:?}");
-                    println!("Col for output bytes: {col_to_enable:?}");
+                    let col_to_enable = last_keccak_column + num_flex_cols;
                     if advice.index() == col_to_enable {
                         meta.enable_equality(advice);
                     }
